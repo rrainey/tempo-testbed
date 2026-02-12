@@ -1,0 +1,90 @@
+{
+  "analysisVersion": "1.0.0",
+  "analyzedAt": "2026-02-11T13:20:27.437Z",
+  "events": {
+    "exitOffsetSec": 794.2,
+    "deploymentOffsetSec": 859.8,
+    "landingOffsetSec": null,
+    "exitAltitudeFt": 13483.214758765565,
+    "deployAltitudeFt": 2548.74784417943,
+    "exitLatitude": 33.456003333333335,
+    "exitLongitude": -96.37804716666666,
+    "maxDescentRateFpm": 11614.173246010741
+  },
+  "velocityBins": {
+    "bins": [
+      {
+        "fallRate_mph": 100,
+        "elapsed_sec": 0,
+        "calibrated_elapsed_sec": 1.9
+      },
+      {
+        "fallRate_mph": 105,
+        "elapsed_sec": 1.9,
+        "calibrated_elapsed_sec": 7.5
+      },
+      {
+        "fallRate_mph": 110,
+        "elapsed_sec": 7.9,
+        "calibrated_elapsed_sec": 5
+      },
+      {
+        "fallRate_mph": 115,
+        "elapsed_sec": 14.2,
+        "calibrated_elapsed_sec": 10.3
+      },
+      {
+        "fallRate_mph": 120,
+        "elapsed_sec": 14,
+        "calibrated_elapsed_sec": 10.3
+      },
+      {
+        "fallRate_mph": 125,
+        "elapsed_sec": 5.4,
+        "calibrated_elapsed_sec": 3.7
+      },
+      {
+        "fallRate_mph": 130,
+        "elapsed_sec": 8.2,
+        "calibrated_elapsed_sec": 4.7
+      },
+      {
+        "fallRate_mph": 135,
+        "elapsed_sec": 0,
+        "calibrated_elapsed_sec": 4.2
+      },
+      {
+        "fallRate_mph": 140,
+        "elapsed_sec": 0,
+        "calibrated_elapsed_sec": 4
+      }
+    ],
+    "summary": {
+      "raw": {
+        "totalAnalysisTime": 51.6,
+        "averageFallRate": 119,
+        "minFallRate": 105,
+        "maxFallRate": 132
+      },
+      "calibrated": {
+        "totalAnalysisTime": 51.6,
+        "averageFallRate": 119,
+        "minFallRate": 99,
+        "maxFallRate": 141
+      },
+      "analysisWindow": {
+        "startOffset": 806.2,
+        "endOffset": 857.8,
+        "duration": 51.6
+      }
+    }
+  },
+  "metadata": {
+    "logDuration_sec": 1039,
+    "logEntryCount": 3155,
+    "hasGPS": true,
+    "logVersion": 110,
+    "logString": "\"Tempo V2 1.0.0 (89f8806-dirty)\"",
+    "surfacePressureAlt_m": 177.69840000000002
+  }
+}

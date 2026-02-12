@@ -1,0 +1,15 @@
+{
+  "name": "Riley Solo View — Jump 2 (2026-02-06 19:40 UTC)",
+  "description": "Single-device analysis of riley's Jump 2 log (same data as test case 03, but without divyatej_dt's log for formation view). Useful for testing single-jump analysis in isolation. Originally uploaded as the first test file.",
+  "dropzone": {
+    "name": "Texoma (North TX)",
+    "lat_deg": 33.4569,
+    "lon_deg": -96.3770,
+    "elevation_m": 233.0,
+    "timezone": "America/Chicago"
+  },
+  "jumpers": ["riley"],
+  "baseJumper": "riley",
+  "isSolo": true,
+  "tags": ["solo-view", "belly", "14000ft", "original-test-file", "same-as-03-riley"]
+}

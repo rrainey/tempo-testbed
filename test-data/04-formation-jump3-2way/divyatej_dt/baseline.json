@@ -1,0 +1,100 @@
+{
+  "analysisVersion": "1.0.0",
+  "analyzedAt": "2026-02-11T13:20:29.283Z",
+  "events": {
+    "exitOffsetSec": 673.2,
+    "deploymentOffsetSec": 737.4,
+    "landingOffsetSec": null,
+    "exitAltitudeFt": 13363.35519567283,
+    "deployAltitudeFt": 2620.1596770230785,
+    "exitLatitude": 33.458557666666664,
+    "exitLongitude": -96.383308,
+    "maxDescentRateFpm": 12795.27560999709
+  },
+  "velocityBins": {
+    "bins": [
+      {
+        "fallRate_mph": 105,
+        "elapsed_sec": 0,
+        "calibrated_elapsed_sec": 1
+      },
+      {
+        "fallRate_mph": 110,
+        "elapsed_sec": 1,
+        "calibrated_elapsed_sec": 9.9
+      },
+      {
+        "fallRate_mph": 115,
+        "elapsed_sec": 17.3,
+        "calibrated_elapsed_sec": 7.2
+      },
+      {
+        "fallRate_mph": 120,
+        "elapsed_sec": 15.1,
+        "calibrated_elapsed_sec": 14.6
+      },
+      {
+        "fallRate_mph": 125,
+        "elapsed_sec": 8,
+        "calibrated_elapsed_sec": 7.7
+      },
+      {
+        "fallRate_mph": 130,
+        "elapsed_sec": 4,
+        "calibrated_elapsed_sec": 2.4
+      },
+      {
+        "fallRate_mph": 135,
+        "elapsed_sec": 3.1,
+        "calibrated_elapsed_sec": 1.9
+      },
+      {
+        "fallRate_mph": 140,
+        "elapsed_sec": 1.4,
+        "calibrated_elapsed_sec": 1.3
+      },
+      {
+        "fallRate_mph": 145,
+        "elapsed_sec": 0.3,
+        "calibrated_elapsed_sec": 2.7
+      },
+      {
+        "fallRate_mph": 150,
+        "elapsed_sec": 0,
+        "calibrated_elapsed_sec": 1.2
+      },
+      {
+        "fallRate_mph": 155,
+        "elapsed_sec": 0,
+        "calibrated_elapsed_sec": 0.3
+      }
+    ],
+    "summary": {
+      "raw": {
+        "totalAnalysisTime": 50.2,
+        "averageFallRate": 121,
+        "minFallRate": 112,
+        "maxFallRate": 145
+      },
+      "calibrated": {
+        "totalAnalysisTime": 50.2,
+        "averageFallRate": 122,
+        "minFallRate": 105,
+        "maxFallRate": 155
+      },
+      "analysisWindow": {
+        "startOffset": 685.2,
+        "endOffset": 735.4,
+        "duration": 50.2
+      }
+    }
+  },
+  "metadata": {
+    "logDuration_sec": 898.7,
+    "logEntryCount": 6737,
+    "hasGPS": true,
+    "logVersion": 110,
+    "logString": "\"Tempo V2 1.0.0 (89f8806-dirty)\"",
+    "surfacePressureAlt_m": 194.4624
+  }
+}

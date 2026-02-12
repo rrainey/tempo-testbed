@@ -1,0 +1,15 @@
+{
+  "name": "3-Way Formation — Jump 1 (2026-02-06 18:27 UTC)",
+  "description": "First jump of the day. 3-way formation with riley, russ, and divyatej_dt. Exit ~14,200 ft AGL. All three devices recorded. Firmware V110. Freefall detected at ~794s (riley), ~795s (russ), ~771s (divyatej_dt) millis. Log hash IDs: D243913E (riley), FBCE83F5 (russ), FBC3C6C5 (divyatej_dt).",
+  "dropzone": {
+    "name": "Texoma (North TX)",
+    "lat_deg": 33.4569,
+    "lon_deg": -96.3770,
+    "elevation_m": 233.0,
+    "timezone": "America/Chicago"
+  },
+  "jumpers": ["riley", "russ", "divyatej_dt"],
+  "baseJumper": "riley",
+  "isSolo": false,
+  "tags": ["formation", "3way", "belly", "14000ft", "first-formation-test"]
+}

@@ -1,0 +1,35 @@
+{
+  "name": "tempo-testbed",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "analyze": "tsx src/lib/testbed/cli-analyze.ts",
+    "analyze:accept": "tsx src/lib/testbed/cli-analyze.ts --accept"
+  },
+  "dependencies": {
+    "@mantine/core": "^8.3.2",
+    "@mantine/hooks": "^8.3.2",
+    "@mantine/notifications": "^8.3.2",
+    "@tabler/icons-react": "^3.34.1",
+    "@types/geodesy": "^2.2.8",
+    "egm96-universal": "^1.1.1",
+    "geodesy": "^2.4.0",
+    "next": "^15.5.9",
+    "nmea-simple": "^3.3.0",
+    "react": "19.1.0",
+    "react-dom": "19.1.0",
+    "recharts": "^3.1.2",
+    "three": "^0.180.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/three": "^0.180.0",
+    "tsx": "^4.20.5",
+    "typescript": "^5"
+  }
+}

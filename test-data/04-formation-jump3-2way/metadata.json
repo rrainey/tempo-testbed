@@ -1,0 +1,15 @@
+{
+  "name": "2-Way Formation — Jump 3 (2026-02-06 20:49 UTC)",
+  "description": "Third and final jump of the day. 2-way formation with riley and divyatej_dt. Exit ~14,200 ft AGL. Longest logs of the three jumps (~59K lines each). Firmware V110. Log hash IDs: 51F70073 (riley), C706A47C (divyatej_dt).",
+  "dropzone": {
+    "name": "Texoma (North TX)",
+    "lat_deg": 33.4569,
+    "lon_deg": -96.3770,
+    "elevation_m": 233.0,
+    "timezone": "America/Chicago"
+  },
+  "jumpers": ["riley", "divyatej_dt"],
+  "baseJumper": "riley",
+  "isSolo": false,
+  "tags": ["formation", "2way", "belly", "14000ft", "longest-logs"]
+}

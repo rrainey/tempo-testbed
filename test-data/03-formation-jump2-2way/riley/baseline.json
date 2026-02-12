@@ -1,0 +1,85 @@
+{
+  "analysisVersion": "1.0.0",
+  "analyzedAt": "2026-02-11T13:20:28.367Z",
+  "events": {
+    "exitOffsetSec": 594.4,
+    "deploymentOffsetSec": 657,
+    "landingOffsetSec": null,
+    "exitAltitudeFt": 13104.290323411682,
+    "deployAltitudeFt": 2613.4177959544677,
+    "exitLatitude": 33.459856,
+    "exitLongitude": -96.38703916666667,
+    "maxDescentRateFpm": 11614.173246010741
+  },
+  "velocityBins": {
+    "bins": [
+      {
+        "fallRate_mph": 105,
+        "elapsed_sec": 0,
+        "calibrated_elapsed_sec": 3
+      },
+      {
+        "fallRate_mph": 110,
+        "elapsed_sec": 7.3,
+        "calibrated_elapsed_sec": 16.1
+      },
+      {
+        "fallRate_mph": 115,
+        "elapsed_sec": 18.9,
+        "calibrated_elapsed_sec": 5.7
+      },
+      {
+        "fallRate_mph": 120,
+        "elapsed_sec": 8.8,
+        "calibrated_elapsed_sec": 8.2
+      },
+      {
+        "fallRate_mph": 125,
+        "elapsed_sec": 4.9,
+        "calibrated_elapsed_sec": 4.2
+      },
+      {
+        "fallRate_mph": 130,
+        "elapsed_sec": 8.7,
+        "calibrated_elapsed_sec": 3.2
+      },
+      {
+        "fallRate_mph": 135,
+        "elapsed_sec": 0,
+        "calibrated_elapsed_sec": 5.4
+      },
+      {
+        "fallRate_mph": 140,
+        "elapsed_sec": 0,
+        "calibrated_elapsed_sec": 2.8
+      }
+    ],
+    "summary": {
+      "raw": {
+        "totalAnalysisTime": 48.6,
+        "averageFallRate": 119,
+        "minFallRate": 110,
+        "maxFallRate": 132
+      },
+      "calibrated": {
+        "totalAnalysisTime": 48.6,
+        "averageFallRate": 119,
+        "minFallRate": 103,
+        "maxFallRate": 140
+      },
+      "analysisWindow": {
+        "startOffset": 606.4,
+        "endOffset": 655,
+        "duration": 48.6
+      }
+    }
+  },
+  "metadata": {
+    "logDuration_sec": 835.9,
+    "logEntryCount": 3060,
+    "hasGPS": true,
+    "logVersion": 110,
+    "logString": "\"Tempo V2 1.0.0 (89f8806-dirty)\"",
+    "surfacePressureAlt_m": 187.1472
+  }
+}

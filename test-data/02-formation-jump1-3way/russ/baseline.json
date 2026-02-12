@@ -1,0 +1,23 @@
+{
+  "analysisVersion": "1.0.0",
+  "analyzedAt": "2026-02-11T13:20:27.766Z",
+  "events": {
+    "exitOffsetSec": null,
+    "deploymentOffsetSec": null,
+    "landingOffsetSec": 30,
+    "exitAltitudeFt": null,
+    "deployAltitudeFt": null,
+    "exitLatitude": null,
+    "exitLongitude": null,
+    "maxDescentRateFpm": null
+  },
+  "velocityBins": null,
+  "metadata": {
+    "logDuration_sec": 1047.4,
+    "logEntryCount": 1975,
+    "hasGPS": true,
+    "logVersion": 110,
+    "logString": "\"Tempo V2 1.0.0 (89f8806-dirty)\"",
+    "surfacePressureAlt_m": 176.17440000000002
+  }
+}

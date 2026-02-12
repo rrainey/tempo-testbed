@@ -1,0 +1,24 @@
+{
+  "analysisVersion": "0.0.0",
+  "analyzedAt": null,
+  "note": "Placeholder baseline. Run 'Re-analyze' in the testbed to populate with actual results from the current algorithm.",
+  "events": {
+    "exitOffsetSec": null,
+    "deploymentOffsetSec": null,
+    "landingOffsetSec": null,
+    "exitAltitudeFt": null,
+    "deployAltitudeFt": null,
+    "exitLatitude": null,
+    "exitLongitude": null,
+    "maxDescentRateFpm": null
+  },
+  "velocityBins": null,
+  "metadata": {
+    "logDuration_sec": null,
+    "logEntryCount": null,
+    "hasGPS": null,
+    "logVersion": null,
+    "logString": null,
+    "surfacePressureAlt_m": null
+  }
+}
