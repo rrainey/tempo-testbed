@@ -1,10 +1,10 @@
 {
   "analysisVersion": "1.0.0",
-  "analyzedAt": "2026-02-11T13:20:28.625Z",
+  "analyzedAt": "2026-02-13T01:25:34.130Z",
   "events": {
     "exitOffsetSec": 596.8,
     "deploymentOffsetSec": 660.5,
-    "landingOffsetSec": null,
+    "landingOffsetSec": 749.7,
     "exitAltitudeFt": 13054.770850163944,
     "deployAltitudeFt": 2526.417813329133,
     "exitLatitude": 33.4601045,
@@ -76,7 +76,7 @@
   },
   "metadata": {
     "logDuration_sec": 810.6,
-    "logEntryCount": 2892,
+    "logEntryCount": 2893,
     "hasGPS": true,
     "logVersion": 110,
     "logString": "\"Tempo V2 1.0.0 (89f8806-dirty)\"",

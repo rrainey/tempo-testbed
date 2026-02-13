@@ -107,6 +107,19 @@ export default function DashboardPage() {
                 <Badge size="xs" variant="outline">
                   {tc.jumperCount} jumper{tc.jumperCount !== 1 ? 's' : ''}
                 </Badge>
+                {!tc.metadata.isSolo && (
+                  <Badge
+                    size="xs"
+                    variant="light"
+                    color="violet"
+                    component={Link}
+                    href={`/formation/${tc.id}`}
+                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                    style={{ cursor: 'pointer' }}
+                  >
+                    Formation
+                  </Badge>
+                )}
                 {tc.metadata.tags.slice(0, 3).map(tag => (
                   <Badge key={tag} size="xs" variant="dot" color="gray">{tag}</Badge>
                 ))}

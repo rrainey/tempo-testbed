@@ -167,6 +167,17 @@ export default function TestCasePage() {
             <Text c="dimmed" size="sm">{testCase.metadata.description}</Text>
           </div>
           <Group>
+            {!testCase.metadata.isSolo && (
+              <Button
+                component={Link}
+                href={`/formation/${testCaseId}`}
+                leftSection={<IconPlayerPlay size={16} />}
+                variant="light"
+                color="violet"
+              >
+                Formation Playback
+              </Button>
+            )}
             <Button
               leftSection={<IconRefresh size={16} />}
               onClick={analyzeAll}

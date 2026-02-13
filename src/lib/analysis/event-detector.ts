@@ -24,37 +24,77 @@ export class EventDetector {
   /**
    * Detect exit from aircraft.
    *
-   * Primary method: use $PST state transition LOGGING → JUMPED.
-   * The device triggers this after 0.5s of sustained < 0.6g, so we
-   * subtract 0.5s to estimate the actual exit moment.
+   * Two-stage approach:
+   *   1. Use $PST JUMPED transition as a lower bound — the exit happened
+   *      at or after this time. The device triggers JUMPED after 0.5s of
+   *      sustained < 0.6g, but this can fire early if the jumper climbs
+   *      out of the aircraft before the formation exit.
+   *   2. Starting from the $PST time, scan forward for the onset of
+   *      sustained freefall (RoD > 5000 fpm for 2+ consecutive seconds).
+   *      That onset is the true exit moment.
    *
-   * Fallback: first sample with GNSS-derived RoD > 5000 fpm AND accel < 0.8g.
+   * Fallback (no $PST): scan from beginning using accel + RoD heuristic.
    */
   static detectExit(data: ParsedLogData): { offsetSec?: number; altitudeFt?: number; latitude?: number; longitude?: number } {
     const { logEntries } = data;
 
-    // --- Primary: $PST JUMPED transition ---
+    // --- Primary: $PST JUMPED as lower bound, then confirm with sustained RoD ---
     const jumpedTransition = data.stateTransitions?.find(
       t => t.toState === 'JUMPED'
     );
 
     if (jumpedTransition) {
-      const exitTime = jumpedTransition.timeOffset_sec - 0.5; // device confirmed after 0.5s of low-g
+      const pstTime = jumpedTransition.timeOffset_sec - 0.5;
 
-      // Find the closest log entry to get altitude and position
-      const exitEntry = this.findClosestEntry(logEntries, exitTime);
+      // Scan forward from $PST time for sustained freefall onset
+      const freefallOnset = this.findSustainedFreefallOnset(logEntries, pstTime);
 
-      console.log(`[EVENT DETECTOR] Exit detected via $PST JUMPED at ${exitTime.toFixed(1)}s, altitude ${exitEntry?.baroAlt_ft || 'unknown'}ft`);
+      // Validate: the onset must be at a reasonable exit altitude (> 3000 ft AGL).
+      // A false positive from sparse GNSS data (e.g. under canopy at 1900 ft) is rejected.
+      const MIN_EXIT_ALTITUDE_FT = 3000;
+      const onsetValid = freefallOnset &&
+        freefallOnset.baroAlt_ft !== null &&
+        freefallOnset.baroAlt_ft > MIN_EXIT_ALTITUDE_FT;
 
+      if (freefallOnset && onsetValid) {
+        console.log(
+          `[EVENT DETECTOR] Exit detected: $PST JUMPED at ${pstTime.toFixed(1)}s, ` +
+          `sustained freefall onset at ${freefallOnset.timeOffset.toFixed(1)}s ` +
+          `(${(freefallOnset.timeOffset - pstTime).toFixed(1)}s after $PST), ` +
+          `altitude ${freefallOnset.baroAlt_ft || 'unknown'}ft`
+        );
+        return {
+          offsetSec: freefallOnset.timeOffset,
+          altitudeFt: freefallOnset.baroAlt_ft || undefined,
+          latitude: freefallOnset.location?.lat_deg,
+          longitude: freefallOnset.location?.lon_deg,
+        };
+      }
+
+      // $PST exists but sustained RoD not confirmed (sparse GNSS, or false positive rejected).
+      // Fall back to $PST - 0.5s directly.
+      const exitEntry = this.findClosestEntry(logEntries, pstTime);
+      if (freefallOnset && !onsetValid) {
+        console.log(
+          `[EVENT DETECTOR] Sustained freefall at ${freefallOnset.timeOffset.toFixed(1)}s rejected ` +
+          `(altitude ${freefallOnset.baroAlt_ft?.toFixed(0)}ft < ${MIN_EXIT_ALTITUDE_FT}ft). ` +
+          `Falling back to $PST at ${pstTime.toFixed(1)}s, altitude ${exitEntry?.baroAlt_ft || 'unknown'}ft`
+        );
+      } else {
+        console.log(
+          `[EVENT DETECTOR] Exit detected via $PST JUMPED (no RoD confirmation) ` +
+          `at ${pstTime.toFixed(1)}s, altitude ${exitEntry?.baroAlt_ft || 'unknown'}ft`
+        );
+      }
       return {
-        offsetSec: exitTime,
+        offsetSec: pstTime,
         altitudeFt: exitEntry?.baroAlt_ft || undefined,
         latitude: exitEntry?.location?.lat_deg,
         longitude: exitEntry?.location?.lon_deg,
       };
     }
 
-    // --- Fallback: accel + RoD heuristic ---
+    // --- Fallback: accel + RoD heuristic (no $PST available) ---
     for (let i = 0; i < logEntries.length - 4; i++) {
       const entry = logEntries[i];
 
@@ -80,6 +120,43 @@ export class EventDetector {
 
     console.log('[EVENT DETECTOR] No exit detected');
     return {};
+  }
+
+  /**
+   * Find the onset of sustained freefall starting from a given time.
+   * Looks for the first entry where RoD > 5000 fpm and stays above
+   * that threshold for at least 2 consecutive seconds.
+   */
+  private static findSustainedFreefallOnset(
+    logEntries: KMLDataV1[],
+    startTime: number
+  ): KMLDataV1 | null {
+    let candidateEntry: KMLDataV1 | null = null;
+    const ROD_THRESHOLD_FPM = 5000;
+    const SUSTAINED_DURATION_SEC = 2.0;
+
+    for (const entry of logEntries) {
+      if (entry.timeOffset < startTime) continue;
+
+      // Only consider entries with valid GNSS-derived RoD
+      if (entry.rateOfDescent_fpm === null) continue;
+
+      if (entry.rateOfDescent_fpm >= ROD_THRESHOLD_FPM) {
+        // Start or continue a candidate window
+        if (candidateEntry === null) {
+          candidateEntry = entry;
+        }
+        // Check if we've sustained long enough
+        if (entry.timeOffset - candidateEntry.timeOffset >= SUSTAINED_DURATION_SEC) {
+          return candidateEntry;
+        }
+      } else {
+        // RoD dropped below threshold — reset candidate
+        candidateEntry = null;
+      }
+    }
+
+    return null;
   }
 
   /**
