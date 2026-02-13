@@ -3,18 +3,21 @@ import React from 'react';
 import { Card, Stack, Text, Title, Badge, Group, Divider } from '@mantine/core';
 import { IconArrowDown, IconWindmill, IconMountain } from '@tabler/icons-react';
 import { interpolatePosition } from '../../lib/formation/coordinates';
+import type { AltitudeMode } from '../../lib/formation/coordinates';
 import type { FormationData } from './FormationViewer';
 
 interface BaseInfoPanelProps {
   formation: FormationData;
   currentTime: number;
   baseJumperId: string;
+  altitudeMode: AltitudeMode;
 }
 
 export const BaseInfoPanel: React.FC<BaseInfoPanelProps> = ({
   formation,
   currentTime,
-  baseJumperId
+  baseJumperId,
+  altitudeMode
 }) => {
   const baseParticipant = formation.participants.find(p => p.userId === baseJumperId);
   
@@ -83,18 +86,21 @@ export const BaseInfoPanel: React.FC<BaseInfoPanelProps> = ({
           <Group gap="xs">
             <IconMountain size={18} />
             <Text size="sm" fw={500}>Altitude</Text>
+            <Badge size="xs" variant="light">
+              {altitudeMode === 'Barometric' ? 'Baro' : 'GPS'}
+            </Badge>
           </Group>
-          
+
           <Group justify="space-between">
-            <Text size="sm" c="dimmed">Barometric:</Text>
+            <Text size="sm" c="dimmed">Baro AGL:</Text>
             <Text size="sm" fw={500}>
-              {currentMetrics.baroAlt_ft ? currentMetrics.baroAlt_ft.toFixed(0) : '---'} ft MSL
+              {(currentMetrics.adjBaroAlt_ftAGL ?? currentMetrics.baroAlt_ft)?.toFixed(0) ?? '---'} ft
             </Text>
           </Group>
-          
-          {altitudeAGL && (
+
+          {altitudeAGL != null && (
             <Group justify="space-between">
-              <Text size="sm" c="dimmed">AGL:</Text>
+              <Text size="sm" c="dimmed">GPS AGL:</Text>
               <Text size="sm" fw={500}>
                 {altitudeAGL.toFixed(0)} ft
               </Text>

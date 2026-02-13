@@ -55,6 +55,7 @@ export function kmlToTimeSeries(entries: KMLDataV1[]): TimeSeriesPoint[] {
 
     result.push({
       timeOffset: entry.timeOffset,
+      timestamp: entry.timestamp ?? undefined,
       location: entry.location,
       baroAlt_ft: entry.baroAlt_ft ?? 0,
       groundspeed_kmph: entry.groundspeed_kmph ?? undefined,
@@ -65,6 +66,173 @@ export function kmlToTimeSeries(entries: KMLDataV1[]): TimeSeriesPoint[] {
   }
 
   return result;
+}
+
+/**
+ * Interpolate barometric altitude at a given timeOffset within a time series.
+ */
+function findBaroAtTimeOffset(timeSeries: TimeSeriesPoint[], targetOffset: number): number | undefined {
+  if (timeSeries.length === 0) return undefined;
+
+  // Clamp to bounds
+  if (targetOffset <= timeSeries[0].timeOffset) return timeSeries[0].baroAlt_ft;
+  if (targetOffset >= timeSeries[timeSeries.length - 1].timeOffset) {
+    return timeSeries[timeSeries.length - 1].baroAlt_ft;
+  }
+
+  // Find bracketing samples
+  for (let i = 0; i < timeSeries.length - 1; i++) {
+    if (timeSeries[i].timeOffset <= targetOffset && timeSeries[i + 1].timeOffset > targetOffset) {
+      const dt = timeSeries[i + 1].timeOffset - timeSeries[i].timeOffset;
+      const t = (targetOffset - timeSeries[i].timeOffset) / dt;
+      return timeSeries[i].baroAlt_ft + t * (timeSeries[i + 1].baroAlt_ft - timeSeries[i].baroAlt_ft);
+    }
+  }
+  return undefined;
+}
+
+/**
+ * Find the nearest time series entry that has a valid UTC timestamp.
+ */
+function findNearestEntryWithTimestamp(
+  timeSeries: TimeSeriesPoint[],
+  targetOffset: number
+): TimeSeriesPoint | undefined {
+  let best: TimeSeriesPoint | undefined;
+  let bestDist = Infinity;
+  for (const pt of timeSeries) {
+    if (pt.timestamp) {
+      const dist = Math.abs(pt.timeOffset - targetOffset);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = pt;
+      }
+    }
+  }
+  return best;
+}
+
+/**
+ * Find the timeOffset in `otherTimeSeries` that corresponds to the same UTC instant
+ * as `baseTimeOffset` in `baseTimeSeries`. Uses UTC timestamps for cross-device sync.
+ */
+function findSyncedTimeOffset(
+  baseTimeSeries: TimeSeriesPoint[],
+  otherTimeSeries: TimeSeriesPoint[],
+  baseTimeOffset: number
+): number | undefined {
+  // Find a base entry near the target offset that has a timestamp
+  const baseEntry = findNearestEntryWithTimestamp(baseTimeSeries, baseTimeOffset);
+  if (!baseEntry || !baseEntry.timestamp) return undefined;
+
+  // Compute the UTC time at baseTimeOffset by offsetting from the nearest timestamped entry
+  const baseUTC = baseEntry.timestamp.getTime() + (baseTimeOffset - baseEntry.timeOffset) * 1000;
+
+  // Find the other device entry closest to this UTC time
+  const otherEntry = findNearestEntryWithTimestamp(otherTimeSeries, otherTimeSeries[0]?.timeOffset ?? 0);
+  if (!otherEntry || !otherEntry.timestamp) return undefined;
+
+  // Compute the other device's timeOffset at the same UTC instant
+  const otherUTC = otherEntry.timestamp.getTime();
+  const otherOffset = otherEntry.timeOffset + (baseUTC - otherUTC) / 1000;
+
+  return otherOffset;
+}
+
+/**
+ * Compute per-participant reference barometric altitude at a synchronized time.
+ * Stores `refBaroAlt_ft` on each participant so the client can recalibrate
+ * when the user switches the base jumper.
+ *
+ * Also computes initial scale factors relative to `baseJumperId` and applies
+ * `adjBaroAlt_ftAGL = baroAlt_ft * scaleFactor` to every sample.
+ */
+function computeAndApplyBaroCalibration(
+  participants: ParticipantData[],
+  baseJumperId: string,
+  exitTimeOffset?: number
+): void {
+  const baseParticipant = participants.find(p => p.userId === baseJumperId);
+  if (!baseParticipant || baseParticipant.timeSeries.length === 0) {
+    // No base → everyone gets identity calibration
+    for (const p of participants) {
+      p.refBaroAlt_ft = undefined;
+      for (const pt of p.timeSeries) pt.adjBaroAlt_ftAGL = pt.baroAlt_ft;
+    }
+    return;
+  }
+
+  // Reference time: 30s before exit, or 75% through the base's timeline
+  const baseTimes = baseParticipant.timeSeries;
+  let refTimeOffset: number;
+  if (exitTimeOffset !== undefined) {
+    refTimeOffset = exitTimeOffset - 30;
+  } else {
+    const duration = baseTimes[baseTimes.length - 1].timeOffset - baseTimes[0].timeOffset;
+    refTimeOffset = baseTimes[0].timeOffset + duration * 0.75;
+  }
+
+  // Clamp to base's data range
+  refTimeOffset = Math.max(refTimeOffset, baseTimes[0].timeOffset);
+  refTimeOffset = Math.min(refTimeOffset, baseTimes[baseTimes.length - 1].timeOffset);
+
+  // Store base's reference baro reading
+  const baseBaro = findBaroAtTimeOffset(baseTimes, refTimeOffset);
+  baseParticipant.refBaroAlt_ft = baseBaro;
+
+  if (baseBaro === undefined || baseBaro < 100) {
+    console.warn('[BaroCal] Base baro too low at reference time, skipping calibration');
+    for (const p of participants) {
+      p.refBaroAlt_ft = undefined;
+      for (const pt of p.timeSeries) pt.adjBaroAlt_ftAGL = pt.baroAlt_ft;
+    }
+    return;
+  }
+
+  console.log(`[BaroCal] Reference: base=${baseJumperId} at timeOffset=${refTimeOffset.toFixed(1)}s, baseBaro=${baseBaro.toFixed(1)} ft AGL`);
+
+  // Apply identity to base jumper
+  for (const pt of baseParticipant.timeSeries) pt.adjBaroAlt_ftAGL = pt.baroAlt_ft;
+
+  for (const participant of participants) {
+    if (participant.userId === baseJumperId) continue;
+
+    // Find the other device's timeOffset at the same UTC instant
+    const syncedOffset = findSyncedTimeOffset(
+      baseTimes,
+      participant.timeSeries,
+      refTimeOffset
+    );
+
+    if (syncedOffset === undefined) {
+      console.warn(`[BaroCal] No UTC sync for ${participant.userId}, using scaleFactor=1.0`);
+      participant.refBaroAlt_ft = undefined;
+      for (const pt of participant.timeSeries) pt.adjBaroAlt_ftAGL = pt.baroAlt_ft;
+      continue;
+    }
+
+    const otherBaro = findBaroAtTimeOffset(participant.timeSeries, syncedOffset);
+    participant.refBaroAlt_ft = otherBaro;
+
+    if (otherBaro === undefined || otherBaro < 100) {
+      console.warn(`[BaroCal] Baro too low for ${participant.userId} at synced offset, using scaleFactor=1.0`);
+      for (const pt of participant.timeSeries) pt.adjBaroAlt_ftAGL = pt.baroAlt_ft;
+      continue;
+    }
+
+    const scaleFactor = baseBaro / otherBaro;
+
+    // Reject outliers — factor should be close to 1.0
+    if (scaleFactor < 0.90 || scaleFactor > 1.10) {
+      console.warn(`[BaroCal] scaleFactor=${scaleFactor.toFixed(4)} out of range for ${participant.userId}, using 1.0`);
+      for (const pt of participant.timeSeries) pt.adjBaroAlt_ftAGL = pt.baroAlt_ft;
+    } else {
+      console.log(`[BaroCal] ${participant.userId}: scaleFactor=${scaleFactor.toFixed(4)} (otherBaro=${otherBaro.toFixed(1)} ft)`);
+      for (const pt of participant.timeSeries) {
+        pt.adjBaroAlt_ftAGL = pt.baroAlt_ft * scaleFactor;
+      }
+    }
+  }
 }
 
 /**
@@ -133,6 +301,10 @@ export function buildFormationData(
     const midIdx = Math.floor(baseParticipant.timeSeries.length / 2);
     jumpRunTrack = baseParticipant.timeSeries[midIdx].groundtrack_degT ?? 0;
   }
+
+  // Cross-device barometric calibration (also stores refBaroAlt_ft per participant)
+  const firstExitTime = exitTimes.length > 0 ? Math.min(...exitTimes) : undefined;
+  computeAndApplyBaroCalibration(participants, metadata.baseJumper, firstExitTime);
 
   // Find the first available timestamp for startTime
   let startTime = new Date();

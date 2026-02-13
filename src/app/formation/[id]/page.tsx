@@ -14,6 +14,8 @@ import { BaseInfoPanel } from '@/components/formation/BaseInfoPanel';
 import { JumperListPanel } from '@/components/formation/JumperListPanel';
 import type { FormationData } from '@/components/formation/FormationViewer';
 import type { GeodeticCoordinates } from '@/lib/formation/types';
+import { recalibrateForBase } from '@/lib/formation/coordinates';
+import type { AltitudeMode } from '@/lib/formation/coordinates';
 
 interface FormationApiResponse extends Omit<FormationData, 'startTime'> {
   startTime: string; // ISO string from JSON
@@ -34,6 +36,7 @@ export default function FormationPlaybackPage() {
   // Shared state for synchronizing panels with viewer
   const [currentTime, setCurrentTime] = useState(0);
   const [baseJumperId, setBaseJumperId] = useState('');
+  const [altitudeMode, setAltitudeMode] = useState<AltitudeMode>('Barometric');
 
   useEffect(() => {
     fetch(`/api/formation/${testCaseId}`)
@@ -74,6 +77,12 @@ export default function FormationPlaybackPage() {
 
   const handleBaseChange = useCallback((newBaseId: string) => {
     setBaseJumperId(newBaseId);
+    // Recalibrate barometric altitudes relative to the new base jumper
+    setFormation(prev => {
+      if (!prev) return prev;
+      const recalibrated = recalibrateForBase(prev.participants, newBaseId);
+      return { ...prev, participants: recalibrated };
+    });
   }, []);
 
   const handleTimeChange = useCallback((time: number) => {
@@ -143,6 +152,8 @@ export default function FormationPlaybackPage() {
             <FormationViewer
               formation={formation}
               dzCenter={dzCenter}
+              altitudeMode={altitudeMode}
+              onAltitudeModeChange={setAltitudeMode}
               onBaseChange={handleBaseChange}
               onTimeChange={handleTimeChange}
             />
@@ -155,12 +166,14 @@ export default function FormationPlaybackPage() {
                 formation={formation}
                 currentTime={currentTime}
                 baseJumperId={baseJumperId}
+                altitudeMode={altitudeMode}
               />
               <JumperListPanel
                 formation={formation}
                 currentTime={currentTime}
                 baseJumperId={baseJumperId}
                 dzCenter={dzCenter}
+                altitudeMode={altitudeMode}
               />
             </Stack>
           </Grid.Col>

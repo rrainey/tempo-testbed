@@ -3,6 +3,7 @@ import React, { useMemo } from 'react';
 import { Card, Table, Text, Badge, Group, Stack, Title, Divider } from '@mantine/core';
 import { IconTrendingUp, IconTrendingDown, IconMinus } from '@tabler/icons-react';
 import { projectFormationAtTime, interpolatePosition } from '../../lib/formation/coordinates';
+import type { AltitudeMode } from '../../lib/formation/coordinates';
 import type { FormationData } from './FormationViewer';
 import type { GeodeticCoordinates, Vector3 } from '../../lib/formation/types';
 
@@ -24,24 +25,36 @@ interface JumperListPanelProps {
   currentTime: number;
   baseJumperId: string;
   dzCenter: GeodeticCoordinates;
+  altitudeMode: AltitudeMode;
 }
 
 function calculateVelocityVector(
   participant: any,
-  timeOffset: number
+  timeOffset: number,
+  altitudeMode: AltitudeMode = 'GPS'
 ): Vector3 {
   // Get velocity from two nearby samples
   const dt = 0.25; // 1/4 second delta
   const t1 = Math.max(0, timeOffset - dt/2);
   const t2 = timeOffset + dt/2;
-  
+
   const pos1 = interpolatePosition(participant.timeSeries, t1);
   const pos2 = interpolatePosition(participant.timeSeries, t2);
-  
+
+  // Z velocity: use barometric altitude when in Barometric mode
+  let z: number;
+  if (altitudeMode === 'Barometric') {
+    const alt1_m = (pos1.adjBaroAlt_ftAGL ?? pos1.baroAlt_ft) * 0.3048;
+    const alt2_m = (pos2.adjBaroAlt_ftAGL ?? pos2.baroAlt_ft) * 0.3048;
+    z = -(alt2_m - alt1_m) / dt; // m/s down (positive)
+  } else {
+    z = -(pos2.location.alt_m - pos1.location.alt_m) / dt; // m/s down (positive)
+  }
+
   return {
     x: (pos2.location.lat_deg - pos1.location.lat_deg) * 111320 / dt, // m/s north
     y: (pos2.location.lon_deg - pos1.location.lon_deg) * 111320 * Math.cos(pos1.location.lat_deg * Math.PI / 180) / dt, // m/s east
-    z: -(pos2.location.alt_m - pos1.location.alt_m) / dt // m/s down (positive)
+    z
   };
 }
 
@@ -92,7 +105,8 @@ export const JumperListPanel: React.FC<JumperListPanelProps> = ({
   formation,
   currentTime,
   baseJumperId,
-  dzCenter
+  dzCenter,
+  altitudeMode
 }) => {
   const metrics = useMemo(() => {
     try {
@@ -101,7 +115,8 @@ export const JumperListPanel: React.FC<JumperListPanelProps> = ({
         formation.participants,
         currentTime,
         baseJumperId,
-        dzCenter
+        dzCenter,
+        altitudeMode
       );
 
       // Find base participant and position
@@ -111,7 +126,7 @@ export const JumperListPanel: React.FC<JumperListPanelProps> = ({
       if (!baseParticipant || !basePosition) return [];
 
       // Calculate base velocity
-      const baseVelocity = calculateVelocityVector(baseParticipant, currentTime);
+      const baseVelocity = calculateVelocityVector(baseParticipant, currentTime, altitudeMode);
 
       // Calculate metrics for each jumper
       return positions
@@ -120,7 +135,7 @@ export const JumperListPanel: React.FC<JumperListPanelProps> = ({
           const jumperParticipant = formation.participants.find(p => p.userId === jumperPos.userId);
           if (!jumperParticipant) return null;
 
-          const jumperVelocity = calculateVelocityVector(jumperParticipant, currentTime);
+          const jumperVelocity = calculateVelocityVector(jumperParticipant, currentTime, altitudeMode);
           
           const metrics = calculateJumperMetrics(
             jumperPos.position,
@@ -143,7 +158,7 @@ export const JumperListPanel: React.FC<JumperListPanelProps> = ({
       console.error('Error calculating jumper metrics:', error);
       return [];
     }
-  }, [formation, currentTime, baseJumperId, dzCenter]);
+  }, [formation, currentTime, baseJumperId, dzCenter, altitudeMode]);
 
   const getClosureRateIcon = (rate: number) => {
     if (rate > 5) return <IconTrendingDown size={16} color="orange" />; // Approaching fast

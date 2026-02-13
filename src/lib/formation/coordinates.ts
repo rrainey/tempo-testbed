@@ -1,6 +1,8 @@
 // lib/formation/coordinates.ts
 import { Vector3, GeodeticCoordinates } from './types';
 
+export type AltitudeMode = 'GPS' | 'Barometric';
+
 // Constants
 const EARTH_RADIUS_M = 6371000; // Earth radius in meters (approximate)
 
@@ -119,7 +121,12 @@ export function interpolatePosition(
   
   // Linear interpolation for barometric altitude
   const baroAlt_ft = before.baroAlt_ft + t * (after.baroAlt_ft - before.baroAlt_ft);
-  
+
+  // Linear interpolation for calibrated barometric altitude
+  const adjBaroAlt_ftAGL = (before.adjBaroAlt_ftAGL != null && after.adjBaroAlt_ftAGL != null)
+    ? before.adjBaroAlt_ftAGL + t * (after.adjBaroAlt_ftAGL - before.adjBaroAlt_ftAGL)
+    : undefined;
+
   // Use latest values for track and speed (more accurate than interpolation)
   const groundtrack_degT = after.groundtrack_degT || before.groundtrack_degT;
   const groundspeed_kmph = after.groundspeed_kmph || before.groundspeed_kmph;
@@ -132,6 +139,7 @@ export function interpolatePosition(
     timeOffset,
     location,
     baroAlt_ft,
+    adjBaroAlt_ftAGL,
     groundtrack_degT,
     groundspeed_kmph,
     verticalSpeed_mps,
@@ -213,32 +221,45 @@ export function projectFormationAtTime(
   participants: ParticipantData[],
   timeOffset: number,
   baseJumperId: string,
-  dzCenter: GeodeticCoordinates
+  dzCenter: GeodeticCoordinates,
+  altitudeMode: AltitudeMode = 'GPS'
 ): ProjectedPosition[] {
   // Find base jumper
   const baseParticipant = participants.find(p => p.userId === baseJumperId);
   if (!baseParticipant || baseParticipant.timeSeries.length === 0) {
     throw new Error('Base jumper not found or has no data');
   }
-  
+
   // Interpolate base position at current time
   const baseData = interpolatePosition(baseParticipant.timeSeries, timeOffset);
   const baseNEDPos = wgs84ToNEDDZ(baseData.location, dzCenter);
   const baseGroundTrack = baseData.groundtrack_degT || 0;
-  
+
+  // In Barometric mode, override base NED Z with calibrated baro altitude
+  if (altitudeMode === 'Barometric') {
+    const baseBaroAlt_m = (baseData.adjBaroAlt_ftAGL ?? baseData.baroAlt_ft) * 0.3048;
+    baseNEDPos.z = -baseBaroAlt_m; // NED Down is negative altitude
+  }
+
   // Project all participants
   return participants
     .filter(p => p.isVisible && p.timeSeries.length > 0)
     .map(participant => {
       // Interpolate participant position
       const data = interpolatePosition(participant.timeSeries, timeOffset);
-      
+
       // Transform to NED,DZ then to Base Exit Frame
       const nedPos = wgs84ToNEDDZ(data.location, dzCenter);
-      const projected = nedDZToBaseExitFrame(nedPos, baseNEDPos, baseGroundTrack);
-      
-      // Calibrate fall rate
 
+      // In Barometric mode, override NED Z with calibrated baro altitude
+      if (altitudeMode === 'Barometric') {
+        const baroAlt_m = (data.adjBaroAlt_ftAGL ?? data.baroAlt_ft) * 0.3048;
+        nedPos.z = -baroAlt_m; // NED Down is negative altitude
+      }
+
+      const projected = nedDZToBaseExitFrame(nedPos, baseNEDPos, baseGroundTrack);
+
+      // Calibrate fall rate
       let normalizedFallRate_mph: number | undefined = undefined;
       if (data.verticalSpeed_mps) {
         normalizedFallRate_mph = calibrateFallRate(
@@ -246,7 +267,7 @@ export function projectFormationAtTime(
           data.baroAlt_ft
         );
       }
-      
+
       return {
         userId: participant.userId,
         name: participant.name,
@@ -255,6 +276,7 @@ export function projectFormationAtTime(
         isDataGap: data.isInterpolated,
         metrics: {
           baroAlt_ft: data.baroAlt_ft,
+          adjBaroAlt_ftAGL: data.adjBaroAlt_ftAGL,
           verticalSpeed_mps: data.verticalSpeed_mps,
           normalizedFallRate_mph,
           groundtrack_degT: data.groundtrack_degT,
@@ -264,11 +286,45 @@ export function projectFormationAtTime(
     });
 }
 
+/**
+ * Recalibrate adjBaroAlt_ftAGL for all participants relative to a new base jumper.
+ * Uses refBaroAlt_ft (stored per participant at the calibration reference time)
+ * to compute: scaleFactor = refBaro[newBase] / refBaro[jumper].
+ * Returns a new participants array with updated adjBaroAlt_ftAGL values.
+ */
+export function recalibrateForBase(
+  participants: ParticipantData[],
+  newBaseId: string
+): ParticipantData[] {
+  const baseParticipant = participants.find(p => p.userId === newBaseId);
+  const baseRef = baseParticipant?.refBaroAlt_ft;
+
+  return participants.map(p => {
+    let scaleFactor = 1.0;
+
+    if (baseRef && baseRef > 100 && p.refBaroAlt_ft && p.refBaroAlt_ft > 100) {
+      const candidate = baseRef / p.refBaroAlt_ft;
+      if (candidate >= 0.90 && candidate <= 1.10) {
+        scaleFactor = candidate;
+      }
+    }
+
+    const newTimeSeries = p.timeSeries.map(pt => ({
+      ...pt,
+      adjBaroAlt_ftAGL: pt.baroAlt_ft * scaleFactor,
+    }));
+
+    return { ...p, timeSeries: newTimeSeries };
+  });
+}
+
 // Type definitions for the module
 export interface TimeSeriesPoint {
   timeOffset: number;
+  timestamp?: Date;
   location: GeodeticCoordinates;
   baroAlt_ft: number;
+  adjBaroAlt_ftAGL?: number;
   groundspeed_kmph?: number;
   groundtrack_degT?: number;
   verticalSpeed_mps?: number;
@@ -283,6 +339,7 @@ export interface ParticipantData {
   isBase: boolean;
   isVisible: boolean;
   timeSeries: TimeSeriesPoint[];
+  refBaroAlt_ft?: number; // baro reading at calibration reference time (for cross-device recalibration)
 }
 
 export interface ProjectedPosition {
@@ -293,6 +350,7 @@ export interface ProjectedPosition {
   isDataGap: boolean;
   metrics: {
     baroAlt_ft: number;
+    adjBaroAlt_ftAGL?: number;
     verticalSpeed_mps?: number;
     normalizedFallRate_mph?: number;
     groundtrack_degT?: number;

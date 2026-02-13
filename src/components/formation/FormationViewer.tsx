@@ -3,10 +3,10 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { ViewControls, VIEW_CONFIGURATIONS } from './ViewControls';
-import { Stack, Select, Button, Group, Slider, Text } from '@mantine/core';
+import { Stack, Select, Button, Group, Slider, Text, SegmentedControl } from '@mantine/core';
 import { IconPlayerPlay, IconPlayerPause } from '@tabler/icons-react';
 import { projectFormationAtTime } from '../../lib/formation/coordinates';
-import type { ParticipantData, ProjectedPosition } from '../../lib/formation/coordinates';
+import type { AltitudeMode, ParticipantData, ProjectedPosition } from '../../lib/formation/coordinates';
 import type { GeodeticCoordinates } from '../../lib/formation/types';
 import type { Vector3 } from '../../lib/formation/types';
 
@@ -24,6 +24,8 @@ export interface FormationData {
 interface FormationViewerProps {
   formation: FormationData;
   dzCenter: GeodeticCoordinates;
+  altitudeMode: AltitudeMode;
+  onAltitudeModeChange?: (mode: AltitudeMode) => void;
   onBaseChange?: (newBaseId: string) => void;
   onTimeChange?: (time: number) => void;
 }
@@ -62,6 +64,8 @@ function toDisplayCoords(pos: Vector3, viewMode: string): THREE.Vector3 {
 export const FormationViewer: React.FC<FormationViewerProps> = ({
   formation,
   dzCenter,
+  altitudeMode,
+  onAltitudeModeChange,
   onBaseChange,
   onTimeChange,
 }) => {
@@ -216,6 +220,7 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
         currentTime,
         baseJumperId,
         dzCenter,
+        altitudeMode,
       );
     } catch (err) {
       console.error('[FormationViewer] Projection error:', err);
@@ -291,7 +296,7 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
         `[FormationViewer] Auto-scaled: maxDist=${maxDist.toFixed(1)}m, viewRadius=${viewRadius.toFixed(0)}m`,
       );
     }
-  }, [formation, currentTime, viewMode, baseJumperId, dzCenter]);
+  }, [formation, currentTime, viewMode, baseJumperId, dzCenter, altitudeMode]);
 
   // ── trails ──
   useEffect(() => {
@@ -320,6 +325,7 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
             t,
             baseJumperId,
             dzCenter,
+            altitudeMode,
           );
           const p = projected.find(pp => pp.userId === participant.userId);
           if (p) points.push(toDisplayCoords(p.position, viewMode));
@@ -346,7 +352,7 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
         line.geometry.setFromPoints(points);
       }
     }
-  }, [formation, currentTime, showTrails, trailLength, baseJumperId, viewMode, dzCenter, bounds.min]);
+  }, [formation, currentTime, showTrails, trailLength, baseJumperId, viewMode, dzCenter, altitudeMode, bounds.min]);
 
   // ── view mode changes → update camera preset ──
   useEffect(() => {
@@ -454,6 +460,16 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
         <Button variant={showAxes ? 'filled' : 'outline'} size="sm" onClick={() => setShowAxes(v => !v)}>
           Axes
         </Button>
+        <Text size="sm" fw={500}>Altitude:</Text>
+        <SegmentedControl
+          value={altitudeMode}
+          onChange={v => onAltitudeModeChange?.(v as AltitudeMode)}
+          data={[
+            { label: 'Barometric', value: 'Barometric' },
+            { label: 'GPS', value: 'GPS' },
+          ]}
+          size="sm"
+        />
       </Group>
 
       {/* Playback */}
