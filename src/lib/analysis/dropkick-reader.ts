@@ -34,7 +34,7 @@ export interface KMLDataV1 {
 	rateOfDescent_fpm: number | null,		// barometric
 	peakAccel_mps2: Vector3 | null,			// peak acceleration sampled during the interval
 	accel_mps2: Vector3 | null,
-	rot_dps: Vector3 | null,
+	rot_rps: Vector3 | null,
 }
 
 /*
@@ -106,12 +106,13 @@ interface IMUPacket extends PacketStub<typeof imuSentenceId> {
 
 const im2SentenceId: "_IM2" = "_IM2";
 
-interface IM2Packet extends PacketStub<typeof im2SentenceId> {
+export interface IM2Packet extends PacketStub<typeof im2SentenceId> {
 	timestamp_ms: number;
-	q0: number;
-	q1: number;
-	q2: number;
-	q3: number;
+	q0: number;  // w (scalar)
+	q1: number;  // x
+	q2: number;  // y
+	q3: number;  // z
+	timeOffset?: number;  // seconds from log start (computed from PTH correlation)
 }
 
 const verSentenceId: "_VER" = "_VER";
@@ -304,6 +305,7 @@ export class DropkickReader {
 		this.lastGNSSTimeOffset_sec = NaN;
 		this.stateTransitions = [];
 		this.lastDeviceState = 'LOGGING';
+		this.im2Packets = [];
 
 	}
 
@@ -350,6 +352,7 @@ export class DropkickReader {
 	lastGNSSTimeOffset_sec: number;
 	stateTransitions: DeviceStateTransition[];	// $PST state transitions (e.g. LOGGING→JUMPED)
 	lastDeviceState: string;
+	im2Packets: IM2Packet[];					// $PIM2 AHRS quaternion packets (20Hz)
 
 	
 	// Experimental; not fully implemented
@@ -372,7 +375,7 @@ export class DropkickReader {
 			rateOfDescent_fpm: null,
 			peakAccel_mps2: null,
 			accel_mps2: null,
-			rot_dps: null,
+			rot_rps: null,
 		};
 	}
 
@@ -553,7 +556,7 @@ export class DropkickReader {
 								y: this.acc.y / this.numImuSamples,
 								z: this.acc.z / this.numImuSamples
 							};
-							this.curEntry.rot_dps = { 
+							this.curEntry.rot_rps = { 
 								x: this.rot.x / this.numImuSamples,
 								y: this.rot.y / this.numImuSamples,
 								z: this.rot.z / this.numImuSamples
@@ -590,6 +593,13 @@ export class DropkickReader {
 						}
 
 						this.numImuSamples ++;
+					}
+
+					else if (packet.sentenceId === im2SentenceId) {
+						// AHRS quaternion (20Hz) — convert device millis() to timeOffset using PTH correlation
+						const timeOffset = this.lastTimeOffset_sec +
+							(packet.timestamp_ms - this.lastTimeHackTimestamp_ms + this.timeHackSerialAdjustment_ms) / 1000.0;
+						this.im2Packets.push({ ...packet, timeOffset });
 					}
 
 					else if (packet.sentenceId === envSentenceId) {

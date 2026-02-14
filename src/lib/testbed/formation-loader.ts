@@ -7,8 +7,10 @@ import { LogParser } from '../analysis/log-parser';
 import type { ParsedLogData } from '../analysis/log-parser';
 import type { KMLDataV1 } from '../analysis/dropkick-reader';
 import { EventDetector } from '../analysis/event-detector';
+import type { JumpEvents } from '../analysis/event-detector';
 import { calibrateFallRate } from '../formation/coordinates';
 import type { TimeSeriesPoint, ParticipantData } from '../formation/coordinates';
+import { estimateOrientation, interpolateQuaternionsToTimePoints } from '../formation/orientation-estimator';
 import type { FormationData } from '../../components/formation/FormationViewer';
 import type { GeodeticCoordinates } from '../formation/types';
 import type { TestCaseMetadata } from './data-loader';
@@ -246,6 +248,7 @@ export function buildFormationData(
   const participants: ParticipantData[] = [];
   const exitTimes: number[] = [];
   const deploymentTimes: number[] = [];
+  const jumperEvents = new Map<string, JumpEvents>();
 
   for (let i = 0; i < metadata.jumpers.length; i++) {
     const jumperName = metadata.jumpers[i];
@@ -255,6 +258,7 @@ export function buildFormationData(
 
     // Run event detection to get exit and deployment times
     const events = EventDetector.analyzeJump(parsedData);
+    jumperEvents.set(jumperName, events);
     if (events.exitOffsetSec !== undefined) exitTimes.push(events.exitOffsetSec);
     if (events.deploymentOffsetSec !== undefined) deploymentTimes.push(events.deploymentOffsetSec);
 
@@ -305,6 +309,42 @@ export function buildFormationData(
   // Cross-device barometric calibration (also stores refBaroAlt_ft per participant)
   const firstExitTime = exitTimes.length > 0 ? Math.min(...exitTimes) : undefined;
   computeAndApplyBaroCalibration(participants, metadata.baseJumper, firstExitTime);
+
+  // Body orientation estimation from $PIM2 quaternion data
+  for (const participant of participants) {
+    const parsedData = jumperLogs.get(participant.userId);
+    const events = jumperEvents.get(participant.userId);
+    if (!parsedData || !events) continue;
+
+    const { im2Packets, logEntries } = parsedData;
+    if (im2Packets.length === 0) {
+      console.log(`[Orientation] No $PIM2 data for ${participant.userId} — skipping`);
+      continue;
+    }
+
+    console.log(`[Orientation] ${participant.userId}: ${im2Packets.length} PIM2 packets`);
+
+    const estimate = estimateOrientation(im2Packets, logEntries, events);
+    if (!estimate) continue;
+
+    console.log(`[Orientation] Estimated q_D→B for ${participant.userId}: quality=${estimate.quality.toFixed(2)}`);
+
+    // Interpolate body orientation quaternions onto GNSS time points
+    const targetTimeOffsets = participant.timeSeries.map(ts => ts.timeOffset);
+    const orientationSamples = interpolateQuaternionsToTimePoints(
+      im2Packets, targetTimeOffsets, estimate.q_D_to_B
+    );
+
+    // Write orientation_q into the participant's time series
+    const orientationMap = new Map(orientationSamples.map(s => [s.timeOffset, s.q]));
+    for (const ts of participant.timeSeries) {
+      const q = orientationMap.get(ts.timeOffset);
+      if (q) ts.orientation_q = q;
+    }
+
+    const assigned = participant.timeSeries.filter(ts => ts.orientation_q).length;
+    console.log(`[Orientation] ${participant.userId}: assigned orientation to ${assigned}/${participant.timeSeries.length} time series points`);
+  }
 
   // Find the first available timestamp for startTime
   let startTime = new Date();

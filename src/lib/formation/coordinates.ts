@@ -1,5 +1,6 @@
 // lib/formation/coordinates.ts
 import { Vector3, GeodeticCoordinates } from './types';
+import { slerp } from './orientation-estimator';
 
 export type AltitudeMode = 'GPS' | 'Barometric';
 
@@ -134,7 +135,12 @@ export function interpolatePosition(
   // Calculate vertical speed from barometric altitude change
   const dAlt_m = (after.baroAlt_ft - before.baroAlt_ft) * 0.3048;
   const verticalSpeed_mps = dt > 0 ? -dAlt_m / dt : 0; // Negative because falling
-  
+
+  // SLERP interpolation for orientation quaternion
+  const orientation_q = (before.orientation_q && after.orientation_q)
+    ? slerp(before.orientation_q, after.orientation_q, t)
+    : (before.orientation_q || after.orientation_q);
+
   return {
     timeOffset,
     location,
@@ -144,6 +150,7 @@ export function interpolatePosition(
     groundspeed_kmph,
     verticalSpeed_mps,
     normalizedFallRate_mph: before.normalizedFallRate_mph, // Will be recalculated
+    orientation_q,
     isInterpolated
   };
 }
@@ -274,6 +281,7 @@ export function projectFormationAtTime(
         color: participant.color,
         position: projected,
         isDataGap: data.isInterpolated,
+        orientation_q: data.orientation_q,
         metrics: {
           baroAlt_ft: data.baroAlt_ft,
           adjBaroAlt_ftAGL: data.adjBaroAlt_ftAGL,
@@ -329,6 +337,7 @@ export interface TimeSeriesPoint {
   groundtrack_degT?: number;
   verticalSpeed_mps?: number;
   normalizedFallRate_mph?: number;
+  orientation_q?: { w: number; x: number; y: number; z: number };
 }
 
 export interface ParticipantData {
@@ -348,6 +357,7 @@ export interface ProjectedPosition {
   color: string;
   position: Vector3;
   isDataGap: boolean;
+  orientation_q?: { w: number; x: number; y: number; z: number };
   metrics: {
     baroAlt_ft: number;
     adjBaroAlt_ftAGL?: number;

@@ -1,6 +1,6 @@
 // lib/analysis/log-parser.ts
 
-import { DropkickReader, KMLDataV1, GeodeticCoordinates, ReaderState, DeviceStateTransition } from './dropkick-reader';
+import { DropkickReader, KMLDataV1, GeodeticCoordinates, ReaderState, DeviceStateTransition, IM2Packet } from './dropkick-reader';
 
 export interface TimeSeriesPoint {
   timestamp: number; // Seconds from log start
@@ -43,6 +43,9 @@ export interface ParsedLogData {
 
   // Device state transitions (from $PST sentences)
   stateTransitions: DeviceStateTransition[];
+
+  // AHRS quaternion packets (from $PIM2 sentences, 20Hz)
+  im2Packets: IM2Packet[];
 }
 
 export class LogParser {
@@ -87,6 +90,7 @@ export class LogParser {
           hasValidData: false,
           errorMessage: 'No valid entries found in log',
           stateTransitions: [],
+          im2Packets: [],
         };
       }
       
@@ -162,8 +166,9 @@ export class LogParser {
         dzSurfacePressureAltitude_m: reader.dzSurfacePressureAltitude_m,
         dzSurfaceGPSAltitude_m: reader.dzSurfaceGPSAltitude_m,
         stateTransitions: reader.stateTransitions,
+        im2Packets: reader.im2Packets,
       };
-      
+
     } catch (error) {
       console.error('[PARSER] Error parsing log:', error);
       return {
@@ -178,6 +183,7 @@ export class LogParser {
         hasValidData: false,
         errorMessage: `Parse error: ${error instanceof Error ? error.message : 'Unknown error'}`,
         stateTransitions: [],
+        im2Packets: [],
       };
     }
   }

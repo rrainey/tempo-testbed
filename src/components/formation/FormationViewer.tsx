@@ -9,6 +9,7 @@ import { projectFormationAtTime } from '../../lib/formation/coordinates';
 import type { AltitudeMode, ParticipantData, ProjectedPosition } from '../../lib/formation/coordinates';
 import type { GeodeticCoordinates } from '../../lib/formation/types';
 import type { Vector3 } from '../../lib/formation/types';
+import { createHumanoidMesh, disposeHumanoidMesh } from './HumanoidMesh';
 
 export interface FormationData {
   id: string;
@@ -80,7 +81,7 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
     grid: THREE.GridHelper;
     axes: THREE.AxesHelper;
     frameId: number;
-    jumperMeshes: Map<string, THREE.Mesh>;
+    jumperMeshes: Map<string, THREE.Group>;
     trailLines: Map<string, THREE.Line>;
     disposed: boolean;
   } | null>(null);
@@ -149,7 +150,7 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
       grid,
       axes,
       frameId: 0,
-      jumperMeshes: new Map<string, THREE.Mesh>(),
+      jumperMeshes: new Map<string, THREE.Group>(),
       trailLines: new Map<string, THREE.Line>(),
       disposed: false,
     };
@@ -186,10 +187,9 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
       window.removeEventListener('resize', onResize);
 
       // Remove all created meshes and lines from scene, dispose GPU resources
-      ctx.jumperMeshes.forEach(mesh => {
-        scene.remove(mesh);
-        mesh.geometry.dispose();
-        (mesh.material as THREE.Material).dispose();
+      ctx.jumperMeshes.forEach(group => {
+        scene.remove(group);
+        disposeHumanoidMesh(group);
       });
       ctx.jumperMeshes.clear();
 
@@ -228,23 +228,15 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
     }
 
     for (const pos of positions) {
-      let mesh = ctx.jumperMeshes.get(pos.userId);
+      let group = ctx.jumperMeshes.get(pos.userId);
 
-      if (!mesh) {
-        // Create jumper sphere
-        const geo = new THREE.SphereGeometry(2, 16, 16);
-        const mat = new THREE.MeshPhongMaterial({
-          color: new THREE.Color(pos.color),
-          transparent: true,
-          opacity: 0.9,
-          emissive: new THREE.Color(pos.color),
-          emissiveIntensity: 0.3,
-        });
-        mesh = new THREE.Mesh(geo, mat);
-        ctx.scene.add(mesh);
-        ctx.jumperMeshes.set(pos.userId, mesh);
+      if (!group) {
+        // Create humanoid figure
+        group = createHumanoidMesh(pos.color);
+        ctx.scene.add(group);
+        ctx.jumperMeshes.set(pos.userId, group);
 
-        // Name label sprite
+        // Name label sprite (attached above the figure)
         const canvas = document.createElement('canvas');
         canvas.width = 256;
         canvas.height = 64;
@@ -261,15 +253,32 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
         );
         sprite.scale.set(20, 5, 1);
         sprite.position.y = 5;
-        mesh.add(sprite);
+        group.add(sprite);
 
-        console.log(`[FormationViewer] Created mesh for ${pos.name}`);
+        console.log(`[FormationViewer] Created humanoid for ${pos.name}`);
       }
 
       // Update position
       const dp = toDisplayCoords(pos.position, viewMode);
-      mesh.position.copy(dp);
-      (mesh.material as THREE.MeshPhongMaterial).opacity = pos.isDataGap ? 0.5 : 0.9;
+      group.position.copy(dp);
+
+      // Apply orientation quaternion if available
+      if (pos.orientation_q) {
+        // Three.js Quaternion constructor: (x, y, z, w)
+        group.quaternion.set(
+          pos.orientation_q.x,
+          pos.orientation_q.y,
+          pos.orientation_q.z,
+          pos.orientation_q.w
+        );
+      }
+
+      // Adjust opacity for data gaps
+      group.traverse(child => {
+        if (child instanceof THREE.Mesh) {
+          (child.material as THREE.MeshPhongMaterial).opacity = pos.isDataGap ? 0.5 : 0.9;
+        }
+      });
     }
 
     // ── auto-scale camera on first valid projection ──
