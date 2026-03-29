@@ -8,7 +8,6 @@ import { IconPlayerPlay, IconPlayerPause } from '@tabler/icons-react';
 import { projectFormationAtTime } from '../../lib/formation/coordinates';
 import type { AltitudeMode, ParticipantData, ProjectedPosition } from '../../lib/formation/coordinates';
 import type { GeodeticCoordinates } from '../../lib/formation/types';
-import type { Vector3 } from '../../lib/formation/types';
 import { createHumanoidMesh, disposeHumanoidMesh } from './HumanoidMesh';
 
 export interface FormationData {
@@ -46,18 +45,18 @@ function getTimelineBounds(formation: FormationData) {
   };
 }
 
-/** Map Base-Exit-Frame → Three.js display coords for a given view mode */
-function toDisplayCoords(pos: Vector3, viewMode: string): THREE.Vector3 {
-  switch (viewMode) {
-    case 'godsEye':
-      return new THREE.Vector3(pos.x, pos.y, 0);
-    case 'side':
-      return new THREE.Vector3(pos.x, -pos.z, 0);
-    case 'trailing':
-      return new THREE.Vector3(0, pos.y, -pos.z);
-    default:
-      return new THREE.Vector3(pos.x, pos.y, pos.z);
-  }
+/**
+ * Fixed mapping from Base Exit Frame to Three.js world coordinates.
+ *
+ *   Base Frame        Three.js
+ *   x (forward)  →    X
+ *   y (right)    →    Z
+ *   z (down)     →   -Y   (Three.js Y is up)
+ *
+ * Applied once — view changes are handled entirely by camera placement.
+ */
+function baseFrameToWorld(pos: { x: number; y: number; z: number }): THREE.Vector3 {
+  return new THREE.Vector3(pos.x, -pos.z, pos.y);
 }
 
 // ─── component ──────────────────────────────────────────────────
@@ -113,7 +112,8 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
     scene.background = new THREE.Color(0x002233);
 
     const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 50000);
-    camera.position.set(0, -150, 150);
+    camera.position.set(0, 200, 0); // default: god's eye
+    camera.up.set(-1, 0, 0);
     camera.lookAt(0, 0, 0);
 
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -127,9 +127,8 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
     controls.maxDistance = 5000;
     controls.minDistance = 5;
 
-    // Grid (XZ plane by default; rotate for god's-eye XY plane)
+    // Grid in XZ plane (forward/right ground plane)
     const grid = new THREE.GridHelper(200, 20, 0x444444, 0x222222);
-    grid.rotation.x = Math.PI / 2;
     scene.add(grid);
 
     const axes = new THREE.AxesHelper(50);
@@ -221,6 +220,7 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
         baseJumperId,
         dzCenter,
         altitudeMode,
+        formation.jumpRunTrack_degTrue,
       );
     } catch (err) {
       console.error('[FormationViewer] Projection error:', err);
@@ -258,13 +258,11 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
         console.log(`[FormationViewer] Created humanoid for ${pos.name}`);
       }
 
-      // Update position
-      const dp = toDisplayCoords(pos.position, viewMode);
-      group.position.copy(dp);
+      // Place directly in world coordinates — no per-view transformation
+      group.position.copy(baseFrameToWorld(pos.position));
 
       // Apply orientation quaternion if available
       if (pos.orientation_q) {
-        // Three.js Quaternion constructor: (x, y, z, w)
         group.quaternion.set(
           pos.orientation_q.x,
           pos.orientation_q.y,
@@ -287,12 +285,26 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
 
       let maxDist = 0;
       for (const pos of positions) {
-        const dp = toDisplayCoords(pos.position, viewMode);
-        maxDist = Math.max(maxDist, dp.length());
+        const wp = baseFrameToWorld(pos.position);
+        maxDist = Math.max(maxDist, wp.length());
       }
 
       const viewRadius = Math.max(maxDist * 2.5, 50);
-      ctx.camera.position.set(0, -viewRadius, viewRadius);
+      const config = VIEW_CONFIGURATIONS[viewMode];
+      if (config) {
+        const configDist = Math.sqrt(
+          config.cameraPosition.x ** 2 +
+          config.cameraPosition.y ** 2 +
+          config.cameraPosition.z ** 2
+        );
+        const scale = viewRadius / configDist;
+        ctx.camera.position.set(
+          config.cameraPosition.x * scale,
+          config.cameraPosition.y * scale,
+          config.cameraPosition.z * scale,
+        );
+        ctx.camera.up.set(config.cameraUp.x, config.cameraUp.y, config.cameraUp.z);
+      }
       ctx.camera.lookAt(0, 0, 0);
       ctx.controls.target.set(0, 0, 0);
       ctx.controls.update();
@@ -313,7 +325,6 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
     if (!ctx || ctx.disposed) return;
 
     if (!showTrails) {
-      // Remove all trail lines
       ctx.trailLines.forEach(line => ctx.scene.remove(line));
       return;
     }
@@ -335,9 +346,10 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
             baseJumperId,
             dzCenter,
             altitudeMode,
+            formation.jumpRunTrack_degTrue,
           );
           const p = projected.find(pp => pp.userId === participant.userId);
-          if (p) points.push(toDisplayCoords(p.position, viewMode));
+          if (p) points.push(baseFrameToWorld(p.position));
         } catch {
           // skip
         }
@@ -361,9 +373,9 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
         line.geometry.setFromPoints(points);
       }
     }
-  }, [formation, currentTime, showTrails, trailLength, baseJumperId, viewMode, dzCenter, altitudeMode, bounds.min]);
+  }, [formation, currentTime, showTrails, trailLength, baseJumperId, dzCenter, altitudeMode, bounds.min]);
 
-  // ── view mode changes → update camera preset ──
+  // ── view mode changes → camera position & up only ──
   useEffect(() => {
     const ctx = threeRef.current;
     if (!ctx || ctx.disposed) return;
@@ -375,18 +387,13 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
       config.cameraPosition.y,
       config.cameraPosition.z,
     );
-    ctx.controls.target.set(
-      config.cameraTarget.x,
-      config.cameraTarget.y,
-      config.cameraTarget.z,
+    ctx.camera.up.set(
+      config.cameraUp.x,
+      config.cameraUp.y,
+      config.cameraUp.z,
     );
+    ctx.controls.target.set(0, 0, 0);
     ctx.controls.update();
-
-    ctx.grid.rotation.set(
-      config.gridRotation.x,
-      config.gridRotation.y,
-      config.gridRotation.z,
-    );
 
     // Reset auto-scale so camera re-fits on view change
     hasAutoScaled.current = false;
@@ -440,7 +447,7 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
     if (!value) return;
     setBaseJumperId(value);
     onBaseChange?.(value);
-    hasAutoScaled.current = false; // re-fit for new reference
+    hasAutoScaled.current = false;
   };
 
   // ── render ──

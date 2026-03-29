@@ -14,6 +14,9 @@ export interface JumpEvents {
   deployAltitudeFt?: number;
   maxDescentRateFpm?: number;
   
+  // Precise UTC timestamp of exit (ms resolution, from GGA/PTH correlation)
+  exitTimestampUTC?: Date;
+
   // New fields from DropkickReader data
   peakAcceleration?: number; // m/s²
   exitLatitude?: number;
@@ -78,12 +81,12 @@ export class EventDetector {
         console.log(
           `[EVENT DETECTOR] Sustained freefall at ${freefallOnset.timeOffset.toFixed(1)}s rejected ` +
           `(altitude ${freefallOnset.baroAlt_ft?.toFixed(0)}ft < ${MIN_EXIT_ALTITUDE_FT}ft). ` +
-          `Falling back to $PST at ${pstTime.toFixed(1)}s, altitude ${exitEntry?.baroAlt_ft || 'unknown'}ft`
+          `Falling back to $PST at ${pstTime.toFixed(1)}s, altitude ${exitEntry?.baroAlt_ft?.toFixed(0) || 'unknown'}ft`
         );
       } else {
         console.log(
           `[EVENT DETECTOR] Exit detected via $PST JUMPED (no RoD confirmation) ` +
-          `at ${pstTime.toFixed(1)}s, altitude ${exitEntry?.baroAlt_ft || 'unknown'}ft`
+          `at ${pstTime.toFixed(1)}s, altitude ${exitEntry?.baroAlt_ft?.toFixed(0) || 'unknown'}ft`
         );
       }
       return {
@@ -326,6 +329,7 @@ export class EventDetector {
       events.exitAltitudeFt = exit.altitudeFt;
       events.exitLatitude = exit.latitude;
       events.exitLongitude = exit.longitude;
+      events.exitTimestampUTC = new Date(data.startTime.getTime() + exit.offsetSec * 1000);
     }
     
     // Detect deployment

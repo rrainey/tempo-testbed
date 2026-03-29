@@ -16,6 +16,7 @@ interface JumperMetrics {
   closureRate_mph: number;
   relativeAltitude_ft: number;
   horizontalSeparation_ft: number;
+  lateralSeparation_ft: number;
   verticalSpeed_mps: number;
   normalizedFallRate_mph: number;
 }
@@ -90,9 +91,12 @@ function calculateJumperMetrics(
                             relVel.y * lineOfSight.y + 
                             relVel.z * lineOfSight.z);
   
+  const lateralDist_m = Math.abs(dy); // base-frame y = lateral (right/left of track)
+
   return {
     distanceToBase_ft: distance3D_m * 3.28084,
     horizontalSeparation_ft: horizontalDist_m * 3.28084,
+    lateralSeparation_ft: lateralDist_m * 3.28084,
     closureRate_fps: closureRate_mps * 3.28084,
     closureRate_mph: closureRate_mps * 2.23694,
     relativeAltitude_ft: -dz * 3.28084, // Negative dz = above base
@@ -116,7 +120,8 @@ export const JumperListPanel: React.FC<JumperListPanelProps> = ({
         currentTime,
         baseJumperId,
         dzCenter,
-        altitudeMode
+        altitudeMode,
+        formation.jumpRunTrack_degTrue,
       );
 
       // Find base participant and position
@@ -273,6 +278,12 @@ export const JumperListPanel: React.FC<JumperListPanelProps> = ({
             <Text size="xs" c="dimmed">Avg Separation</Text>
             <Text size="sm" fw={500}>
               {(metrics.reduce((sum, m) => sum + m.distanceToBase_ft, 0) / metrics.length).toFixed(0)} ft
+            </Text>
+          </Stack>
+          <Stack gap="xs" align="center">
+            <Text size="xs" c="dimmed">Lateral Spread</Text>
+            <Text size="sm" fw={500}>
+              {Math.max(...metrics.map(m => m.lateralSeparation_ft)).toFixed(0)} ft
             </Text>
           </Stack>
         </Group>

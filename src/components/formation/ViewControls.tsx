@@ -7,79 +7,44 @@ export interface ViewConfiguration {
   name: string;
   description: string;
   icon: React.ReactNode;
-  axes: { x: string; y: string; z: string };
   cameraPosition: { x: number; y: number; z: number };
-  cameraTarget: { x: number; y: number; z: number };
-  gridRotation: { x: number; y: number; z: number };
-  labels: {
-    x: string;
-    y: string;
-    z: string;
-  };
-  scale: {
-    x: [number, number];
-    y: [number, number];
-    z: [number, number];
-  };
+  cameraUp: { x: number; y: number; z: number };
 }
 
+/**
+ * Camera presets for viewing the formation.
+ *
+ * Three.js world axes are mapped from the Base Exit Frame once:
+ *   X = forward  (base x — along jump run track at exit)
+ *   Y = up       (base -z)
+ *   Z = right    (base y — lateral, right of track)
+ *
+ * Each view is purely a camera placement — positions are never transformed.
+ */
 export const VIEW_CONFIGURATIONS: Record<string, ViewConfiguration> = {
   godsEye: {
     name: "God's Eye View",
     description: "Looking down from above",
     icon: <IconEye size={18} />,
-    axes: { x: 'x', y: 'y', z: '-z' }, // Base Exit Frame axes
-    cameraPosition: { x: 0, y: -150, z: 150 },
-    cameraTarget: { x: 0, y: 0, z: 0 },
-    gridRotation: { x: Math.PI / 2, y: 0, z: 0 },
-    labels: {
-      x: 'Forward (ft)', // Along base jumper's ground track
-      y: 'Right (ft)',
-      z: 'Up (ft)'
-    },
-    scale: {
-      x: [-100, 100], // meters, will convert to feet for display
-      y: [-100, 100],
-      z: [-50, 50]
-    }
+    // Camera above on +Y, looking down. Up = -X so forward points up on screen.
+    cameraPosition: { x: 0, y: 200, z: 0 },
+    cameraUp: { x: -1, y: 0, z: 0 },
   },
   side: {
     name: "Side View",
     description: "Looking from the side (perpendicular to jump run)",
     icon: <IconArrowsHorizontal size={18} />,
-    axes: { x: 'x', y: '-z', z: 'y' }, // Forward and Up
+    // Camera on +Z (right side), looking at origin. Screen: X=forward, Y=up.
     cameraPosition: { x: 0, y: 0, z: 200 },
-    cameraTarget: { x: 0, y: 0, z: 0 },
-    gridRotation: { x: 0, y: 0, z: 0 },
-    labels: {
-      x: 'Forward (ft)',
-      y: 'Altitude Difference (ft)',
-      z: 'Right (ft)'
-    },
-    scale: {
-      x: [-100, 100],
-      y: [-50, 50], // Smaller vertical range
-      z: [-100, 100]
-    }
+    cameraUp: { x: 0, y: 1, z: 0 },
   },
   trailing: {
-    name: "Trailing View", 
+    name: "Trailing View",
     description: "Looking forward along jump run",
     icon: <IconFocus size={18} />,
-    axes: { x: 'y', y: '-z', z: '-x' }, // Right and Up
-    cameraPosition: { x: -150, y: 0, z: 50 },
-    cameraTarget: { x: 0, y: 0, z: 0 },
-    gridRotation: { x: 0, y: Math.PI / 2, z: 0 },
-    labels: {
-      x: 'Right (ft)',
-      y: 'Altitude Difference (ft)', 
-      z: 'Behind (ft)'
-    },
-    scale: {
-      x: [-100, 100],
-      y: [-50, 50],
-      z: [-100, 100]
-    }
+    // Camera behind on -X, looking forward. Screen: Z=right, Y=up.
+    cameraPosition: { x: -200, y: 0, z: 0 },
+    cameraUp: { x: 0, y: 1, z: 0 },
   }
 };
 
@@ -104,7 +69,7 @@ export const ViewControls: React.FC<ViewControlsProps> = ({ currentView, onViewC
                 style={
                   currentView === key
                     ? {
-                        backgroundColor: '#228be6', // theme.colors.blue[6]
+                        backgroundColor: '#228be6',
                         color: 'white',
                         borderColor: '#228be6',
                       }

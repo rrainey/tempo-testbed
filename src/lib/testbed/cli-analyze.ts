@@ -53,7 +53,7 @@ async function main() {
         // Print event summary
         const e = result.events;
         console.log(`  ${jumper.name}:`);
-        console.log(`    Exit:       ${e.exitOffsetSec != null ? `${e.exitOffsetSec.toFixed(1)}s @ ${e.exitAltitudeFt?.toLocaleString() ?? '?'} ft` : 'not detected'}`);
+        console.log(`    Exit:       ${e.exitOffsetSec != null ? `${e.exitOffsetSec.toFixed(1)}s @ ${e.exitAltitudeFt?.toLocaleString() ?? '?'} ft — ${e.exitTimestampUTC?.toISOString() ?? '?'}` : 'not detected'}`);
         console.log(`    Deploy:     ${e.deploymentOffsetSec != null ? `${e.deploymentOffsetSec.toFixed(1)}s @ ${e.deployAltitudeFt?.toLocaleString() ?? '?'} ft` : 'not detected'}`);
         console.log(`    Landing:    ${e.landingOffsetSec != null ? `${e.landingOffsetSec.toFixed(1)}s` : 'not detected'}`);
         console.log(`    Max RoD:    ${e.maxDescentRateFpm != null ? `${Math.round(e.maxDescentRateFpm)} fpm (${Math.round(e.maxDescentRateFpm / 88)} mph)` : 'N/A'}`);

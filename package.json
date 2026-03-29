@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "analyze": "tsx src/lib/testbed/cli-analyze.ts",
-    "analyze:accept": "tsx src/lib/testbed/cli-analyze.ts --accept"
+    "analyze:accept": "tsx src/lib/testbed/cli-analyze.ts --accept",
+    "test": "jest",
+    "test:watch": "jest --watch"
   },
   "dependencies": {
     "@mantine/core": "^8.3.2",
@@ -25,10 +27,13 @@
     "three": "^0.180.0"
   },
   "devDependencies": {
+    "@types/jest": "^30.0.0",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "@types/three": "^0.180.0",
+    "jest": "^30.3.0",
+    "ts-jest": "^29.4.6",
     "tsx": "^4.20.5",
     "typescript": "^5"
   }

@@ -229,7 +229,8 @@ export function projectFormationAtTime(
   timeOffset: number,
   baseJumperId: string,
   dzCenter: GeodeticCoordinates,
-  altitudeMode: AltitudeMode = 'GPS'
+  altitudeMode: AltitudeMode = 'GPS',
+  jumpRunTrack_degT?: number
 ): ProjectedPosition[] {
   // Find base jumper
   const baseParticipant = participants.find(p => p.userId === baseJumperId);
@@ -240,7 +241,10 @@ export function projectFormationAtTime(
   // Interpolate base position at current time
   const baseData = interpolatePosition(baseParticipant.timeSeries, timeOffset);
   const baseNEDPos = wgs84ToNEDDZ(baseData.location, dzCenter);
-  const baseGroundTrack = baseData.groundtrack_degT || 0;
+
+  // Use the jump run track established at exit, not the instantaneous GPS ground track.
+  // The base exit frame azimuth is fixed for the entire jump.
+  const baseGroundTrack = jumpRunTrack_degT ?? baseData.groundtrack_degT ?? 0;
 
   // In Barometric mode, override base NED Z with calibrated baro altitude
   if (altitudeMode === 'Barometric') {
