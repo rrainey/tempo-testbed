@@ -12,7 +12,7 @@ import Link from 'next/link';
 import { FormationViewer } from '@/components/formation/FormationViewer';
 import { BaseInfoPanel } from '@/components/formation/BaseInfoPanel';
 import { JumperListPanel } from '@/components/formation/JumperListPanel';
-import type { FormationData } from '@/components/formation/FormationViewer';
+import type { FormationData, CalibrationState } from '@/components/formation/FormationViewer';
 import type { GeodeticCoordinates } from '@/lib/formation/types';
 import { recalibrateForBase } from '@/lib/formation/coordinates';
 import type { AltitudeMode } from '@/lib/formation/coordinates';
@@ -21,6 +21,7 @@ interface FormationApiResponse extends Omit<FormationData, 'startTime'> {
   startTime: string; // ISO string from JSON
   dzCenter: GeodeticCoordinates;
   testCaseName: string;
+  calibration?: CalibrationState | null;
 }
 
 export default function FormationPlaybackPage() {
@@ -37,6 +38,7 @@ export default function FormationPlaybackPage() {
   const [currentTime, setCurrentTime] = useState(0);
   const [baseJumperId, setBaseJumperId] = useState('');
   const [altitudeMode, setAltitudeMode] = useState<AltitudeMode>('Barometric');
+  const [calibration, setCalibration] = useState<CalibrationState | null>(null);
 
   useEffect(() => {
     fetch(`/api/formation/${testCaseId}`)
@@ -54,6 +56,9 @@ export default function FormationPlaybackPage() {
         setDzCenter(data.dzCenter);
         setTestCaseName(data.testCaseName);
         setBaseJumperId(data.baseJumperId);
+        if (data.calibration) {
+          setCalibration(data.calibration);
+        }
 
         // Set initial time to timeline start (10s before first exit) or data start
         if (formationData.timelineStart !== undefined) {
@@ -88,6 +93,28 @@ export default function FormationPlaybackPage() {
   const handleTimeChange = useCallback((time: number) => {
     setCurrentTime(time);
   }, []);
+
+  const handleCalibrationSave = useCallback(async (cal: CalibrationState) => {
+    try {
+      const res = await fetch(`/api/formation/${testCaseId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(cal),
+      });
+      const data: FormationApiResponse & { error?: string } = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      const formationData: FormationData = {
+        ...data,
+        startTime: new Date(data.startTime),
+      };
+      setFormation(formationData);
+      if (data.calibration) setCalibration(data.calibration);
+      console.log('[Calibration] Saved and reloaded formation data');
+    } catch (err) {
+      console.error('[Calibration] Save failed:', err);
+    }
+  }, [testCaseId]);
 
   if (loading) {
     return (
@@ -153,9 +180,12 @@ export default function FormationPlaybackPage() {
               formation={formation}
               dzCenter={dzCenter}
               altitudeMode={altitudeMode}
+              calibration={calibration}
               onAltitudeModeChange={setAltitudeMode}
               onBaseChange={handleBaseChange}
               onTimeChange={handleTimeChange}
+              onCalibrationChange={setCalibration}
+              onCalibrationSave={handleCalibrationSave}
             />
           </Grid.Col>
 

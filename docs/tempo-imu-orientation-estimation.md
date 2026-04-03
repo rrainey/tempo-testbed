@@ -29,6 +29,8 @@ The IMU's sensor frame, fixed relative to the PCB. Orientation relative to the j
 
 The frame the AHRS filter quaternion is referenced to. When using a Madgwick/Mahony complementary filter with the ICM-42688, this is typically gravity-aligned with an arbitrary (gyro-integrated) heading at boot. Pitch and roll are corrected to gravity; heading drifts without a magnetometer.
 
+The Device Frame is invisible to the logged data.  The R frame is what is logged in PIMU and PIM2 log sentences.
+
 ### NED (North-East-Down)
 
 The standard earth-fixed navigation frame.
@@ -53,7 +55,7 @@ This vector d\_D(t), expressed in device coordinates, should correspond to body 
 
 > **x̂\_b^D = normalize( mean( d\_D(t) ) )** over the stable freefall window
 
-**Important caveat**: during true freefall the accelerometer reads near-zero (the device is in free fall, so it can't sense gravity directly). The AHRS filter loses its gravity correction and relies on pure gyro integration, so the quaternion will drift. This means the freefall-derived +X estimate is noisier the longer freefall continues. Best practice: use the first 5–10 seconds of stable freefall, while the quaternion is still well-anchored from the pre-exit gravity reference, and before accumulated gyro drift becomes significant.
+**Note on accelerometer behavior in atmospheric freefall**: unlike freefall in a vacuum, a skydiver in the atmosphere does not experience zero-g. During the first few seconds after exit, gravity exceeds drag and the accelerometer reads below 1g (reduced apparent gravity), but this is brief. As the jumper accelerates toward terminal velocity (~10–15 seconds after exit), drag rises to equal weight and the accelerometer returns to reading approximately 1g. Additionally, the forward velocity imparted by the aircraft bleeds off due to drag, producing a lateral deceleration sensed by the IMU. The net result is that the accelerometer is never truly zero — the AHRS filter retains gravity observability throughout freefall, and the quaternion does not suffer pure-gyro drift. The stable freefall window (exit+12s onward) is at terminal velocity where the AHRS has a clean 1g gravity reference, making the +X\_b estimate reliable.
 
 ### Prior Landing Phase (150–50 ft AGL) → Body +Z_b Direction
 
@@ -160,7 +162,7 @@ Store q\_D→B as an editable parameter in the baseline/metadata. The automated 
 
 | Flight Phase | Observable | Body Axis Recovered | Measurement Source | Reliability |
 |---|---|---|---|---|
-| Stable freefall | Gravity direction via quaternion | +X\_b (chest = down) | AHRS quaternion (gyro-dominated) | Moderate (gyro drift limits window) |
+| Stable freefall | Gravity direction via quaternion | +X\_b (chest = down) | AHRS quaternion (gravity-corrected at terminal velocity) | High (1g reference at terminal) |
 | Prior landing (150–50 ft AGL) | Gravity direction via accelerometer | +Z\_b (down when upright) | Raw accelerometer | High (direct measurement, quasi-steady) |
 | Canopy flight (GPS track) | Heading via course-over-ground | +X\_b horizontal component | GPS `$GNVTG` | Moderate (heading only, no pitch) |
 

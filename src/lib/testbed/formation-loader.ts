@@ -10,10 +10,15 @@ import { EventDetector } from '../analysis/event-detector';
 import type { JumpEvents } from '../analysis/event-detector';
 import { calibrateFallRate } from '../formation/coordinates';
 import type { TimeSeriesPoint, ParticipantData } from '../formation/coordinates';
-import { estimateOrientation, interpolateQuaternionsToTimePoints } from '../formation/orientation-estimator';
+import {
+  estimateOrientation,
+  interpolateQuaternionsToTimePoints,
+  calibrateOrientationHumanAssisted,
+  interpolateQuaternionsHumanAssisted,
+} from '../formation/orientation-estimator';
 import type { FormationData } from '../../components/formation/FormationViewer';
 import type { GeodeticCoordinates } from '../formation/types';
-import type { TestCaseMetadata } from './data-loader';
+import type { TestCaseMetadata, OrientationCalibration } from './data-loader';
 import { loadFlightData } from './data-loader';
 
 // Distinct colors for up to 8 participants
@@ -239,11 +244,14 @@ function computeAndApplyBaroCalibration(
 
 /**
  * Build a FormationData structure from parsed logs for all jumpers in a test case.
+ * When calibration is provided with method='humanAssisted', uses accel-based
+ * orientation estimation instead of the automated freefall/landing approach.
  */
 export function buildFormationData(
   testCaseId: string,
   metadata: TestCaseMetadata,
-  jumperLogs: Map<string, ParsedLogData>
+  jumperLogs: Map<string, ParsedLogData>,
+  calibration?: OrientationCalibration | null
 ): FormationData {
   const participants: ParticipantData[] = [];
   const exitTimes: number[] = [];
@@ -311,6 +319,9 @@ export function buildFormationData(
   computeAndApplyBaroCalibration(participants, metadata.baseJumper, firstExitTime);
 
   // Body orientation estimation from $PIM2 quaternion data
+  const useHumanAssisted = calibration?.method === 'humanAssisted' &&
+    calibration.calibrationTimeOffset !== undefined;
+
   for (const participant of participants) {
     const parsedData = jumperLogs.get(participant.userId);
     const events = jumperEvents.get(participant.userId);
@@ -322,18 +333,37 @@ export function buildFormationData(
       continue;
     }
 
-    console.log(`[Orientation] ${participant.userId}: ${im2Packets.length} PIM2 packets`);
+    console.log(`[Orientation] ${participant.userId}: ${im2Packets.length} PIM2 packets (method: ${useHumanAssisted ? 'human-assisted' : 'automatic'})`);
 
-    const estimate = estimateOrientation(im2Packets, logEntries, events);
-    if (!estimate) continue;
-
-    console.log(`[Orientation] Estimated q_D→B for ${participant.userId}: quality=${estimate.quality.toFixed(2)}`);
-
-    // Interpolate body orientation quaternions onto GNSS time points
     const targetTimeOffsets = participant.timeSeries.map(ts => ts.timeOffset);
-    const orientationSamples = interpolateQuaternionsToTimePoints(
-      im2Packets, targetTimeOffsets, estimate.q_D_to_B
-    );
+    let orientationSamples;
+
+    if (useHumanAssisted) {
+      // Human-assisted: record AHRS quaternion at calibration time.
+      // At t_cal, orientation = identity (belly-down).  At other times,
+      // orientation tracks relative rotation from that reference.
+      // Azimuth (yaw) is applied client-side for real-time feedback.
+      const cal = calibrateOrientationHumanAssisted(
+        logEntries, im2Packets,
+        calibration.calibrationTimeOffset!,
+      );
+      if (!cal) continue;
+
+      orientationSamples = interpolateQuaternionsHumanAssisted(
+        im2Packets, targetTimeOffsets, cal.q_ref
+      );
+    } else {
+      // Automatic: freefall + landing + heading correction
+      const estimate = estimateOrientation(im2Packets, logEntries, events);
+      if (!estimate) continue;
+
+      console.log(`[Orientation] Estimated q_D→B for ${participant.userId}: quality=${estimate.quality.toFixed(2)}`);
+
+      orientationSamples = interpolateQuaternionsToTimePoints(
+        im2Packets, targetTimeOffsets, estimate.q_D_to_B,
+        estimate.q_NED_to_R, jumpRunTrack
+      );
+    }
 
     // Write orientation_q into the participant's time series
     const orientationMap = new Map(orientationSamples.map(s => [s.timeOffset, s.q]));
@@ -370,10 +400,12 @@ export function buildFormationData(
 /**
  * Load and build formation data for a test case.
  * This is the main entry point for the API route.
+ * When calibration is provided, it overrides the saved calibration file.
  */
 export function loadFormationData(
   testCaseId: string,
-  metadata: TestCaseMetadata
+  metadata: TestCaseMetadata,
+  calibration?: OrientationCalibration | null
 ): FormationData {
   const jumperLogs = new Map<string, ParsedLogData>();
 
@@ -387,5 +419,5 @@ export function loadFormationData(
     }
   }
 
-  return buildFormationData(testCaseId, metadata, jumperLogs);
+  return buildFormationData(testCaseId, metadata, jumperLogs, calibration);
 }

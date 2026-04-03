@@ -164,3 +164,38 @@ export function saveBaseline(
   const baselinePath = path.join(TEST_DATA_DIR, testCaseId, jumperName, 'baseline.json');
   fs.writeFileSync(baselinePath, JSON.stringify(baseline, null, 2));
 }
+
+// ─── Orientation Calibration Persistence ────────────────────────
+
+export interface OrientationCalibration {
+  method: 'automatic' | 'humanAssisted';
+  /** Time offset (seconds) of the calibration point — stable freefall */
+  calibrationTimeOffset?: number;
+  /** Per-jumper azimuth in degrees (0–360) relative to the jump run track */
+  jumperAzimuths?: Record<string, number>;
+}
+
+/**
+ * Load orientation calibration for a test case, if it exists.
+ */
+export function loadCalibration(testCaseId: string): OrientationCalibration | null {
+  const calPath = path.join(TEST_DATA_DIR, testCaseId, 'calibration.json');
+  if (!fs.existsSync(calPath)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(calPath, 'utf-8'));
+  } catch (e) {
+    console.error(`Error reading calibration for ${testCaseId}:`, e);
+    return null;
+  }
+}
+
+/**
+ * Save orientation calibration for a test case.
+ */
+export function saveCalibration(
+  testCaseId: string,
+  calibration: OrientationCalibration
+): void {
+  const calPath = path.join(TEST_DATA_DIR, testCaseId, 'calibration.json');
+  fs.writeFileSync(calPath, JSON.stringify(calibration, null, 2));
+}

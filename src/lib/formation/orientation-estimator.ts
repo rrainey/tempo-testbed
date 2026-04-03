@@ -30,6 +30,7 @@ export interface QuaternionSample {
 
 export interface OrientationEstimate {
   q_D_to_B: Quaternion;          // Fixed rotation: Device frame → Body frame
+  q_NED_to_R: Quaternion | null; // Heading correction: NED → AHRS reference frame
   quality: number;                // 0–1, based on orthogonality of raw axes
   freefallWindowUsed: [number, number];
   landingWindowUsed: [number, number];
@@ -142,13 +143,12 @@ function vecNormalize(v: Vec3): Vec3 {
 /**
  * Gravity direction in the AHRS reference frame.
  *
- * Madgwick Fusion NWU/ENU convention: Earth Z-axis is UP.
- * The AHRS quaternion q rotates from Earth → Sensor.
- * When stationary, the accelerometer reads +1g along the gravity axis
- * in the Earth frame, which is [0, 0, 1] (Z-up).
+ * Madgwick Fusion is configured for NED (North-East-Down) convention:
+ * X=North, Y=East, Z=Down.  Gravity points along +Z.
  *
- * We rotate this vector into device frame to find where "down" points
- * in the device's coordinate system.
+ * The AHRS quaternion q rotates from Earth (NED) → Sensor (Device).
+ * We rotate this gravity vector into device frame to find where "down"
+ * points in the device's coordinate system.
  */
 const GRAVITY_IN_REF_FRAME: Vec3 = { x: 0, y: 0, z: 1 };
 
@@ -389,6 +389,144 @@ function getLandingWindow(
   return [windowStart, windowEnd];
 }
 
+/**
+ * Find the final-approach window for heading estimation.
+ * Uses landing - 15s to landing - 5s: the jumper is on straight-in
+ * final, stable, and not maneuvering.
+ */
+function getFinalApproachWindow(
+  jumpEvents: JumpEvents
+): [number, number] | null {
+  if (jumpEvents.landingOffsetSec === undefined) return null;
+
+  const start = jumpEvents.landingOffsetSec - 15;
+  const end = jumpEvents.landingOffsetSec - 5;
+
+  if (start < 0 || end - start < 3) {
+    console.warn(`[Orientation] Final approach window too short or invalid`);
+    return null;
+  }
+
+  return [start, end];
+}
+
+/**
+ * Estimate the heading correction quaternion q_NED→R.
+ *
+ * During final approach (landing - 15s to landing - 5s), the jumper faces
+ * into the direction of travel.  We compare:
+ *   - Body +X_b heading in R-frame (from q_D→B ⊗ q_R→D)
+ *   - GPS ground track heading (from $GNVTG, in NED)
+ *
+ * The difference is the yaw angle between R and NED.  q_NED→R is a
+ * rotation about the gravity axis (NED +Z = down) by that offset.
+ *
+ * @param im2Packets   Raw $PIM2 quaternion samples with timeOffset
+ * @param kmlEntries   Parsed log entries (for GPS ground track)
+ * @param q_D_to_B     Estimated device-to-body rotation
+ * @param jumpEvents   Detected jump events (for landing time)
+ */
+function estimateHeadingCorrection(
+  im2Packets: IM2Packet[],
+  kmlEntries: KMLDataV1[],
+  q_D_to_B: Quaternion,
+  jumpEvents: JumpEvents
+): Quaternion | null {
+  const window = getFinalApproachWindow(jumpEvents);
+  if (!window) return null;
+
+  const [tStart, tEnd] = window;
+  console.log(`[Orientation] Final approach window: ${tStart.toFixed(1)}s to ${tEnd.toFixed(1)}s`);
+
+  // Collect GPS ground track headings in the window
+  const gpsHeadings: number[] = [];
+  for (const e of kmlEntries) {
+    if (e.timeOffset >= tStart && e.timeOffset <= tEnd &&
+        e.groundtrack_degT !== null && e.groundtrack_degT !== undefined &&
+        e.groundspeed_kmph !== null && e.groundspeed_kmph !== undefined &&
+        e.groundspeed_kmph > 5) { // require meaningful ground speed
+      gpsHeadings.push(e.groundtrack_degT);
+    }
+  }
+
+  if (gpsHeadings.length < 3) {
+    console.warn(`[Orientation] Too few GPS track samples in final approach: ${gpsHeadings.length}`);
+    return null;
+  }
+
+  // Compute mean GPS heading (circular mean to handle 360°/0° wraparound)
+  let sinSum = 0, cosSum = 0;
+  for (const h of gpsHeadings) {
+    const rad = h * Math.PI / 180;
+    sinSum += Math.sin(rad);
+    cosSum += Math.cos(rad);
+  }
+  const gpsHeading_rad = Math.atan2(sinSum / gpsHeadings.length, cosSum / gpsHeadings.length);
+
+  // Compute mean body +X_b heading in R-frame over the same window.
+  // Body +X_b in R-frame = q_R→B* ⊗ [0, 1,0,0] ⊗ q_R→B, but it's easier
+  // to compute q_R→B = q_D→B ⊗ q_R→D then rotate the +X unit vector.
+  const pim2Samples = im2Packets.filter(
+    p => p.timeOffset !== undefined && p.timeOffset >= tStart && p.timeOffset <= tEnd
+  );
+
+  if (pim2Samples.length < 10) {
+    console.warn(`[Orientation] Too few PIM2 samples in final approach: ${pim2Samples.length}`);
+    return null;
+  }
+
+  let bodyHdgSinSum = 0, bodyHdgCosSum = 0;
+  let validCount = 0;
+  const BODY_X: Vec3 = { x: 1, y: 0, z: 0 }; // +X_b in body frame
+
+  for (const s of pim2Samples) {
+    const q_R_to_D: Quaternion = { w: s.q0, x: s.q1, y: s.q2, z: s.q3 };
+    const q_R_to_B = computeBodyOrientation(q_D_to_B, q_R_to_D);
+
+    // Body +X_b in R-frame: rotate body X by inverse of q_R_to_B
+    const q_B_to_R = qConjugate(q_R_to_B);
+    const xInR = quaternionRotateVector(q_B_to_R, BODY_X);
+
+    // Project onto horizontal plane (NED convention: X=North, Y=East, Z=Down)
+    // Since R is gravity-aligned, its X-Y plane is horizontal
+    const horizLen = Math.sqrt(xInR.x * xInR.x + xInR.y * xInR.y);
+    if (horizLen < 0.1) continue; // nearly vertical, skip
+
+    const hdg_rad = Math.atan2(xInR.y, xInR.x); // atan2(east, north) = heading from north
+    bodyHdgSinSum += Math.sin(hdg_rad);
+    bodyHdgCosSum += Math.cos(hdg_rad);
+    validCount++;
+  }
+
+  if (validCount < 5) {
+    console.warn(`[Orientation] Too few valid heading samples: ${validCount}`);
+    return null;
+  }
+
+  const bodyHeading_rad = Math.atan2(bodyHdgSinSum / validCount, bodyHdgCosSum / validCount);
+
+  // The yaw offset: how much to rotate R about its Z-axis (down) to align with NED
+  const yawOffset_rad = gpsHeading_rad - bodyHeading_rad;
+
+  console.log(
+    `[Orientation] Heading correction: GPS=${(gpsHeading_rad * 180 / Math.PI).toFixed(1)}°, ` +
+    `body-in-R=${(bodyHeading_rad * 180 / Math.PI).toFixed(1)}°, ` +
+    `yaw offset=${(yawOffset_rad * 180 / Math.PI).toFixed(1)}° ` +
+    `(${gpsHeadings.length} GPS, ${validCount} PIM2 samples)`
+  );
+
+  // q_NED→R is a rotation about the Z-axis (down in NED) by -yawOffset.
+  // q = [cos(θ/2), 0, 0, sin(θ/2)] for rotation about Z by θ.
+  // We want to rotate FROM NED TO R, which is by -yawOffset.
+  const halfAngle = -yawOffset_rad / 2;
+  return qNormalize({
+    w: Math.cos(halfAngle),
+    x: 0,
+    y: 0,
+    z: Math.sin(halfAngle),
+  });
+}
+
 // ─── Main Entry Point ───────────────────────────────────────────
 
 /**
@@ -445,13 +583,177 @@ export function estimateOrientation(
 
   console.log(`[Orientation] Estimated q_D→B: w=${q_D_to_B.w.toFixed(4)}, x=${q_D_to_B.x.toFixed(4)}, y=${q_D_to_B.y.toFixed(4)}, z=${q_D_to_B.z.toFixed(4)}`);
 
+  // Step 5: Heading correction — solve yaw offset between R and NED
+  // using GPS ground track during final approach
+  const q_NED_to_R = estimateHeadingCorrection(im2Packets, kmlEntries, q_D_to_B, jumpEvents);
+  if (q_NED_to_R) {
+    console.log(`[Orientation] Estimated q_NED→R: w=${q_NED_to_R.w.toFixed(4)}, x=${q_NED_to_R.x.toFixed(4)}, y=${q_NED_to_R.y.toFixed(4)}, z=${q_NED_to_R.z.toFixed(4)}`);
+  } else {
+    console.warn('[Orientation] Heading correction unavailable — orientation will have arbitrary heading');
+  }
+
   return {
     q_D_to_B,
+    q_NED_to_R,
     quality,
     freefallWindowUsed: freefallWindow,
     landingWindowUsed: landingWindow,
   };
 }
+
+// ─── Human-Assisted Orientation Estimation ─────────────────────
+
+/**
+ * Result of human-assisted orientation calibration.
+ * q_ref is the AHRS quaternion at calibration time.  Orientation at any
+ * time t is the relative rotation: q_R_to_D(t) ⊗ conj(q_ref).
+ * At t_cal this gives identity — the mesh's belly-down default pose.
+ */
+export interface HumanAssistedCalibration {
+  q_ref: Quaternion;              // q_R_to_D at calibration time
+  calibrationTimeOffset: number;
+}
+
+/**
+ * Perform human-assisted orientation calibration.
+ *
+ * The user asserts that at calibrationTimeOffset, all jumpers are in
+ * stable belly-to-earth freefall.  We record the AHRS quaternion at
+ * that moment as the reference.  Orientation at any time t is then
+ * the relative rotation from calibration:
+ *
+ *   orientation_q(t) = q_R_to_D(t) ⊗ conj(q_ref)
+ *
+ * At t_cal this yields identity — the mesh's belly-down default pose.
+ * At other times it tracks how the device (and body) have rotated
+ * relative to that belly-down reference.
+ *
+ * The accel vector is used to validate the calibration point (confirm
+ * the jumper is in steady flight with ~1g reading).
+ */
+export function calibrateOrientationHumanAssisted(
+  kmlEntries: KMLDataV1[],
+  im2Packets: IM2Packet[],
+  calibrationTimeOffset: number,
+): HumanAssistedCalibration | null {
+  // Validate: check accel magnitude near calibration time
+  const accelEntries = kmlEntries.filter(
+    e => e.accel_mps2 !== null &&
+         e.timeOffset >= calibrationTimeOffset - 0.5 &&
+         e.timeOffset <= calibrationTimeOffset + 0.5
+  );
+
+  if (accelEntries.length > 0) {
+    let accelSum: Vec3 = { x: 0, y: 0, z: 0 };
+    for (const e of accelEntries) {
+      accelSum = vecAdd(accelSum, e.accel_mps2!);
+    }
+    const meanAccel = vecScale(accelSum, 1 / accelEntries.length);
+    const mag = vecLength(meanAccel);
+    console.log(
+      `[Orientation] Human-assisted: accel at t=${calibrationTimeOffset.toFixed(1)}s ` +
+      `(${accelEntries.length} samples): magnitude=${mag.toFixed(2)} m/s² ` +
+      `(expect ~9.8 for stable freefall at terminal)`
+    );
+    if (mag < 4) {
+      console.warn(`[Orientation] Accel magnitude very low (${mag.toFixed(1)} m/s²) — ` +
+        `jumper may not be at terminal velocity yet`);
+    }
+  }
+
+  // Get AHRS quaternion at calibration time (interpolate PIM2)
+  const sorted = im2Packets
+    .filter(p => p.timeOffset !== undefined)
+    .sort((a, b) => a.timeOffset! - b.timeOffset!);
+
+  if (sorted.length < 2) {
+    console.warn('[Orientation] Insufficient PIM2 data for calibration');
+    return null;
+  }
+
+  let before = sorted[0];
+  let after = sorted[1];
+  for (let i = 0; i < sorted.length - 1; i++) {
+    if (sorted[i].timeOffset! <= calibrationTimeOffset &&
+        sorted[i + 1].timeOffset! > calibrationTimeOffset) {
+      before = sorted[i];
+      after = sorted[i + 1];
+      break;
+    }
+  }
+
+  const dt = after.timeOffset! - before.timeOffset!;
+  const t = dt > 0 ? (calibrationTimeOffset - before.timeOffset!) / dt : 0;
+  const q_before: Quaternion = { w: before.q0, x: before.q1, y: before.q2, z: before.q3 };
+  const q_after: Quaternion = { w: after.q0, x: after.q1, y: after.q2, z: after.q3 };
+  const q_ref = slerp(q_before, q_after, t);
+
+  console.log(
+    `[Orientation] Human-assisted calibration: q_ref at t=${calibrationTimeOffset.toFixed(1)}s: ` +
+    `w=${q_ref.w.toFixed(4)}, x=${q_ref.x.toFixed(4)}, y=${q_ref.y.toFixed(4)}, z=${q_ref.z.toFixed(4)}`
+  );
+
+  return { q_ref, calibrationTimeOffset };
+}
+
+/**
+ * Interpolate PIM2 quaternions to time points using human-assisted calibration.
+ *
+ * At each time t:
+ *   orientation_q(t) = q_R_to_D(t) ⊗ conj(q_ref)
+ *
+ * At t_cal this is identity (belly-down).  At other times it gives the
+ * relative rotation of the device/body from the calibration pose.
+ * Heading (yaw) is arbitrary — resolved by the user's azimuth wheel
+ * on the client side.
+ */
+export function interpolateQuaternionsHumanAssisted(
+  im2Packets: IM2Packet[],
+  targetTimeOffsets: number[],
+  q_ref: Quaternion
+): QuaternionSample[] {
+  const sorted = im2Packets
+    .filter(p => p.timeOffset !== undefined)
+    .sort((a, b) => a.timeOffset! - b.timeOffset!);
+
+  if (sorted.length < 2) return [];
+
+  const q_ref_inv = qConjugate(q_ref);
+  const results: QuaternionSample[] = [];
+
+  for (const targetT of targetTimeOffsets) {
+    if (targetT < sorted[0].timeOffset! || targetT > sorted[sorted.length - 1].timeOffset!) {
+      continue;
+    }
+
+    let before = sorted[0];
+    let after = sorted[1];
+    for (let i = 0; i < sorted.length - 1; i++) {
+      if (sorted[i].timeOffset! <= targetT && sorted[i + 1].timeOffset! > targetT) {
+        before = sorted[i];
+        after = sorted[i + 1];
+        break;
+      }
+    }
+
+    const dt = after.timeOffset! - before.timeOffset!;
+    const t = dt > 0 ? (targetT - before.timeOffset!) / dt : 0;
+
+    const q_before: Quaternion = { w: before.q0, x: before.q1, y: before.q2, z: before.q3 };
+    const q_after: Quaternion = { w: after.q0, x: after.q1, y: after.q2, z: after.q3 };
+    const q_R_to_D = slerp(q_before, q_after, t);
+
+    // Relative rotation from calibration pose: identity at t_cal,
+    // tracks physical rotation at all other times.
+    const q_out = qNormalize(qMultiply(q_R_to_D, q_ref_inv));
+
+    results.push({ timeOffset: targetT, q: q_out });
+  }
+
+  return results;
+}
+
+// ─── Shared Utilities ──────────────────────────────────────────
 
 /**
  * Compute body orientation quaternion at a given time.
@@ -461,9 +763,6 @@ export function estimateOrientation(
  * The AHRS quaternion q(t) from $PIM2 represents Earth→Sensor (R→D).
  * We chain it with the fixed q_D→B to get the body orientation relative
  * to the AHRS reference frame.
- *
- * Note: Without heading correction (no magnetometer), the reference frame R
- * has arbitrary heading. Pitch and roll relative to gravity are correct.
  */
 export function computeBodyOrientation(
   q_D_to_B: Quaternion,
@@ -473,16 +772,34 @@ export function computeBodyOrientation(
 }
 
 /**
- * Interpolate quaternion samples from $PIM2 onto GNSS time points.
+ * Construct a quaternion representing a rotation about the NED Z-axis (down)
+ * by a given angle in degrees.  Used for the NED→BaseExitFrame yaw rotation.
+ */
+function yawQuaternion(angle_deg: number): Quaternion {
+  const halfAngle = (angle_deg * Math.PI / 180) / 2;
+  return { w: Math.cos(halfAngle), x: 0, y: 0, z: Math.sin(halfAngle) };
+}
+
+/**
+ * Interpolate quaternion samples from $PIM2 onto GNSS time points,
+ * producing body orientation in the Base Exit Frame.
  *
- * For each target timeOffset, finds the bracketing $PIM2 samples
- * and SLERP-interpolates. Returns an array of QuaternionSamples
- * aligned to the target time offsets.
+ * Full chain:
+ *   q_BEF→B(t) = q_D→B ⊗ q_R→D(t) ⊗ q_NED→R ⊗ q_BEF→NED
+ *
+ * Where q_BEF→NED is a yaw rotation by the jump run track angle
+ * (the Base Exit Frame X-axis is aligned with the aircraft track,
+ * while NED X-axis is North).
+ *
+ * If q_NED_to_R is null (heading correction unavailable), the output
+ * is q_R→B — correct pitch/roll but arbitrary heading.
  */
 export function interpolateQuaternionsToTimePoints(
   im2Packets: IM2Packet[],
   targetTimeOffsets: number[],
-  q_D_to_B: Quaternion
+  q_D_to_B: Quaternion,
+  q_NED_to_R: Quaternion | null,
+  jumpRunTrack_degT: number
 ): QuaternionSample[] {
   // Filter to packets with valid timeOffset, sorted by time
   const sorted = im2Packets
@@ -490,6 +807,21 @@ export function interpolateQuaternionsToTimePoints(
     .sort((a, b) => a.timeOffset! - b.timeOffset!);
 
   if (sorted.length < 2) return [];
+
+  // Pre-compute the fixed portion of the chain.
+  // q_BEF→NED: Base Exit Frame to NED is a yaw by the jump run track angle.
+  // The BEF X-axis points along the track heading; NED X-axis points North.
+  // So NED = rotate BEF by +track angle about Z (down).
+  // Therefore BEF→NED = yaw(+track), and NED→BEF = yaw(-track).
+  const q_BEF_to_NED = yawQuaternion(jumpRunTrack_degT);
+
+  // The fixed suffix applied after each q_R→D(t):
+  //   suffix = q_NED→R ⊗ q_BEF→NED   (if heading correction available)
+  //   suffix = identity               (if not — output stays in R-frame)
+  let suffix: Quaternion | null = null;
+  if (q_NED_to_R) {
+    suffix = qNormalize(qMultiply(q_NED_to_R, q_BEF_to_NED));
+  }
 
   const results: QuaternionSample[] = [];
 
@@ -519,10 +851,13 @@ export function interpolateQuaternionsToTimePoints(
 
     const q_R_to_D = slerp(q_R_to_D_before, q_R_to_D_after, t);
 
-    // Chain with fixed D→B rotation to get body orientation in R-frame
-    const q_R_to_B = computeBodyOrientation(q_D_to_B, q_R_to_D);
+    // Chain: q_D→B ⊗ q_R→D(t) ⊗ suffix
+    let q_out = computeBodyOrientation(q_D_to_B, q_R_to_D);
+    if (suffix) {
+      q_out = qNormalize(qMultiply(q_out, suffix));
+    }
 
-    results.push({ timeOffset: targetT, q: q_R_to_B });
+    results.push({ timeOffset: targetT, q: q_out });
   }
 
   return results;

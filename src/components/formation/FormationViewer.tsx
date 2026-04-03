@@ -3,8 +3,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { ViewControls, VIEW_CONFIGURATIONS } from './ViewControls';
-import { Stack, Select, Button, Group, Slider, Text, SegmentedControl } from '@mantine/core';
-import { IconPlayerPlay, IconPlayerPause } from '@tabler/icons-react';
+import { Stack, Select, Button, Group, Slider, Text, SegmentedControl, Paper, Badge } from '@mantine/core';
+import { IconPlayerPlay, IconPlayerPause, IconDeviceFloppy } from '@tabler/icons-react';
 import { projectFormationAtTime } from '../../lib/formation/coordinates';
 import type { AltitudeMode, ParticipantData, ProjectedPosition } from '../../lib/formation/coordinates';
 import type { GeodeticCoordinates } from '../../lib/formation/types';
@@ -21,13 +21,24 @@ export interface FormationData {
   timelineEnd?: number;
 }
 
+export type OrientationMethod = 'automatic' | 'humanAssisted';
+
+export interface CalibrationState {
+  method: OrientationMethod;
+  calibrationTimeOffset?: number;
+  jumperAzimuths: Record<string, number>;
+}
+
 interface FormationViewerProps {
   formation: FormationData;
   dzCenter: GeodeticCoordinates;
   altitudeMode: AltitudeMode;
+  calibration?: CalibrationState | null;
   onAltitudeModeChange?: (mode: AltitudeMode) => void;
   onBaseChange?: (newBaseId: string) => void;
   onTimeChange?: (time: number) => void;
+  onCalibrationChange?: (cal: CalibrationState) => void;
+  onCalibrationSave?: (cal: CalibrationState) => void;
 }
 
 // ─── helpers ────────────────────────────────────────────────────
@@ -59,15 +70,30 @@ function baseFrameToWorld(pos: { x: number; y: number; z: number }): THREE.Vecto
   return new THREE.Vector3(pos.x, -pos.z, pos.y);
 }
 
+/**
+ * Fixed quaternion that rotates the humanoid mesh from its default local-frame
+ * orientation to belly-to-earth in Three.js world space.
+ *
+ * Mesh body axes at identity:  X(chest)→3js+Z, Y(right)→3js+X, Z(feet)→3js+Y
+ * Belly-to-earth requires:     X(chest)→3js-Y, Y(right)→3js+Z, Z(feet)→3js-X
+ *
+ * Derived from the rotation matrix mapping current→desired: q=(w=0.5, x=0.5, y=-0.5, z=0.5)
+ * Three.js Quaternion constructor order: (x, y, z, w)
+ */
+const BELLY_DOWN_Q = new THREE.Quaternion(0.5, -0.5, 0.5, 0.5);
+
 // ─── component ──────────────────────────────────────────────────
 
 export const FormationViewer: React.FC<FormationViewerProps> = ({
   formation,
   dzCenter,
   altitudeMode,
+  calibration,
   onAltitudeModeChange,
   onBaseChange,
   onTimeChange,
+  onCalibrationChange,
+  onCalibrationSave,
 }) => {
   const mountRef = useRef<HTMLDivElement | null>(null);
 
@@ -112,7 +138,7 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
     scene.background = new THREE.Color(0x002233);
 
     const camera = new THREE.PerspectiveCamera(50, width / height, 0.1, 50000);
-    camera.position.set(0, 200, 0); // default: god's eye
+    camera.position.set(0, 200, 0); // default: overhead / God's eye view
     camera.up.set(-1, 0, 0);
     camera.lookAt(0, 0, 0);
 
@@ -261,14 +287,33 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
       // Place directly in world coordinates — no per-view transformation
       group.position.copy(baseFrameToWorld(pos.position));
 
-      // Apply orientation quaternion if available
+      // Apply orientation quaternion if available.
+      //
+      // orientation_q is a relative rotation from the calibration pose
+      // (identity = belly-down).  It must be composed with:
+      //   1. BELLY_DOWN_Q: maps the mesh's default pose to belly-to-earth
+      //      in Three.js world (body X/chest → 3js -Y/down, body Y/right → 3js +Z).
+      //   2. NED-to-Three.js conversion of orientation_q: negate x, y.
+      //   3. Per-jumper azimuth yaw (client-side, about Three.js Y).
+      //
+      // Final composition: group.quaternion = yaw * orientation_3js * BELLY_DOWN_Q
       if (pos.orientation_q) {
-        group.quaternion.set(
-          pos.orientation_q.x,
-          pos.orientation_q.y,
-          pos.orientation_q.z,
-          pos.orientation_q.w
-        );
+        const q = pos.orientation_q;
+        const orientQ = new THREE.Quaternion(-q.x, -q.y, q.z, q.w);
+
+        // Compose: orientation (in 3js space) * belly-down base pose
+        const meshQ = orientQ.multiply(BELLY_DOWN_Q.clone());
+
+        // Apply per-jumper azimuth offset for real-time visual feedback.
+        // Yaw about Three.js Y (world up) in world space.
+        const azDeg = calibration?.jumperAzimuths?.[pos.userId] ?? 0;
+        if (azDeg !== 0) {
+          const azRad = azDeg * Math.PI / 180;
+          const yawQ = new THREE.Quaternion(0, Math.sin(azRad / 2), 0, Math.cos(azRad / 2));
+          meshQ.premultiply(yawQ);
+        }
+
+        group.quaternion.copy(meshQ);
       }
 
       // Adjust opacity for data gaps
@@ -317,7 +362,7 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
         `[FormationViewer] Auto-scaled: maxDist=${maxDist.toFixed(1)}m, viewRadius=${viewRadius.toFixed(0)}m`,
       );
     }
-  }, [formation, currentTime, viewMode, baseJumperId, dzCenter, altitudeMode]);
+  }, [formation, currentTime, viewMode, baseJumperId, dzCenter, altitudeMode, calibration]);
 
   // ── trails ──
   useEffect(() => {
@@ -487,6 +532,108 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
           size="sm"
         />
       </Group>
+
+      {/* Orientation estimation */}
+      <Paper p="xs" withBorder>
+        <Stack gap="xs">
+          <Group>
+            <Text size="sm" fw={500}>Orientation Estimation:</Text>
+            <SegmentedControl
+              value={calibration?.method ?? 'automatic'}
+              onChange={v => {
+                const method = v as 'automatic' | 'humanAssisted';
+                const updated: CalibrationState = {
+                  method,
+                  calibrationTimeOffset: calibration?.calibrationTimeOffset,
+                  jumperAzimuths: calibration?.jumperAzimuths ?? {},
+                };
+                onCalibrationChange?.(updated);
+                // Switching method triggers server recomputation
+                onCalibrationSave?.(updated);
+              }}
+              data={[
+                { label: 'Automatic', value: 'automatic' },
+                { label: 'Human Assisted', value: 'humanAssisted' },
+              ]}
+              size="sm"
+            />
+          </Group>
+
+          {calibration?.method === 'humanAssisted' && (
+            <Stack gap="xs">
+              <Group>
+                <Text size="sm">Calibration Time:</Text>
+                <Text size="sm" fw={500}>
+                  {calibration.calibrationTimeOffset !== undefined
+                    ? `${calibration.calibrationTimeOffset.toFixed(1)}s`
+                    : '(not set)'}
+                </Text>
+                <Button
+                  size="xs"
+                  variant="light"
+                  onClick={() => {
+                    // Set calibration time and immediately save to trigger
+                    // server-side orientation recomputation from accel data.
+                    const updated: CalibrationState = {
+                      ...calibration,
+                      calibrationTimeOffset: currentTime,
+                    };
+                    onCalibrationChange?.(updated);
+                    onCalibrationSave?.(updated);
+                  }}
+                >
+                  Set to Current Time ({currentTime.toFixed(1)}s)
+                </Button>
+              </Group>
+
+              {/* Per-jumper azimuth wheels */}
+              {formation.participants.map(p => (
+                  <Group key={p.userId} gap="xs" wrap="nowrap">
+                    <Badge
+                      color={p.color}
+                      variant="filled"
+                      size="sm"
+                      style={{ minWidth: 80 }}
+                    >
+                      {p.name}
+                    </Badge>
+                    <Text size="xs" style={{ minWidth: 55 }}>
+                      Az: {(calibration.jumperAzimuths?.[p.userId] ?? 0).toFixed(0)}°
+                    </Text>
+                    <Slider
+                      value={calibration.jumperAzimuths?.[p.userId] ?? 0}
+                      onChange={v => {
+                        onCalibrationChange?.({
+                          ...calibration,
+                          jumperAzimuths: {
+                            ...calibration.jumperAzimuths,
+                            [p.userId]: v,
+                          },
+                        });
+                      }}
+                      min={0}
+                      max={360}
+                      step={1}
+                      style={{ flex: 1 }}
+                      label={v => `${v}°`}
+                    />
+                  </Group>
+                ))}
+
+              <Group>
+                <Button
+                  size="xs"
+                  leftSection={<IconDeviceFloppy size={14} />}
+                  onClick={() => onCalibrationSave?.(calibration)}
+                  disabled={calibration.calibrationTimeOffset === undefined}
+                >
+                  Save Calibration
+                </Button>
+              </Group>
+            </Stack>
+          )}
+        </Stack>
+      </Paper>
 
       {/* Playback */}
       <Group>

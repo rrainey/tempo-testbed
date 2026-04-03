@@ -23,7 +23,7 @@ export interface ViewConfiguration {
  */
 export const VIEW_CONFIGURATIONS: Record<string, ViewConfiguration> = {
   godsEye: {
-    name: "God's Eye View",
+    name: "Overhead View",
     description: "Looking down from above",
     icon: <IconEye size={18} />,
     // Camera above on +Y, looking down. Up = -X so forward points up on screen.
