@@ -4,3 +4,4 @@ dist/
 
 *.MP4
 *.mp4
+*telemetry.json
