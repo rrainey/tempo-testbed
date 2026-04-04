@@ -87,6 +87,92 @@ function baseQuatToWorld(q: { w: number; x: number; y: number; z: number }): THR
   return new THREE.Quaternion(q.x, -q.z, q.y, q.w);
 }
 
+// ─── view orientation legend ────────────────────────────────────
+
+const VIEW_ORIENTATION_CONFIG: Record<string, {
+  vertLabel: string;
+  horizLabel: string;
+  horizDir: 'left' | 'right';
+}> = {
+  godsEye:  { vertLabel: 'Fwd',   horizLabel: 'Right', horizDir: 'right' },
+  side:     { vertLabel: 'Up',    horizLabel: 'Fwd',   horizDir: 'left' },
+  trailing: { vertLabel: 'Up',    horizLabel: 'Right', horizDir: 'right' },
+};
+
+function ViewOrientationLegend({ viewMode }: { viewMode: string }) {
+  const config = VIEW_ORIENTATION_CONFIG[viewMode];
+  if (!config) return null;
+
+  const { vertLabel, horizLabel, horizDir } = config;
+
+  // Layout: origin at bottom-left or bottom-right depending on horizDir
+  // SVG viewBox is 100x100 with room for labels outside the arrows
+  const goesRight = horizDir === 'right';
+  const ox = goesRight ? 16 : 84;   // origin x
+  const oy = 74;                     // origin y
+  const vTipY = 14;                  // vertical arrow tip y
+  const hTipX = goesRight ? 84 : 16; // horizontal arrow tip x
+  const headSize = 5;
+
+  return (
+    <div style={{
+      position: 'absolute',
+      bottom: 12,
+      left: 12,
+      pointerEvents: 'none',
+    }}>
+      <svg width="90" height="90" viewBox="0 0 100 100">
+        {/* Vertical arrow: origin → up */}
+        <line x1={ox} y1={oy} x2={ox} y2={vTipY + 8} stroke="#c5c0c9" strokeWidth="2" />
+        <polygon
+          points={`${ox},${vTipY} ${ox - headSize},${vTipY + 10} ${ox + headSize},${vTipY + 10}`}
+          fill="#c5c0c9"
+        />
+        {/* Vertical label — to the side of the arrowhead */}
+        <text
+          x={ox + (goesRight ? 10 : -10)}
+          y={vTipY + 4}
+          fill="#c5c0c9"
+          fontSize="12"
+          fontWeight="500"
+          textAnchor={goesRight ? 'start' : 'end'}
+          dominantBaseline="middle"
+        >
+          {vertLabel}
+        </text>
+
+        {/* Horizontal arrow: origin → left or right */}
+        <line
+          x1={ox}
+          y1={oy}
+          x2={hTipX + (goesRight ? -8 : 8)}
+          y2={oy}
+          stroke="#c5c0c9"
+          strokeWidth="2"
+        />
+        <polygon
+          points={goesRight
+            ? `${hTipX},${oy} ${hTipX - 10},${oy - headSize} ${hTipX - 10},${oy + headSize}`
+            : `${hTipX},${oy} ${hTipX + 10},${oy - headSize} ${hTipX + 10},${oy + headSize}`}
+          fill="#c5c0c9"
+        />
+        {/* Horizontal label — beyond the arrowhead */}
+        <text
+          x={hTipX + (goesRight ? 2 : -2)}
+          y={oy - 8}
+          fill="#c5c0c9"
+          fontSize="12"
+          fontWeight="500"
+          textAnchor={goesRight ? 'end' : 'start'}
+          dominantBaseline="auto"
+        >
+          {horizLabel}
+        </text>
+      </svg>
+    </div>
+  );
+}
+
 // ─── component ──────────────────────────────────────────────────
 
 export const FormationViewer: React.FC<FormationViewerProps> = ({
@@ -533,6 +619,7 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
             onClose={() => setActiveVideo(null)}
           />
         )}
+        <ViewOrientationLegend viewMode={viewMode} />
       </div>
 
       {/* View controls */}
