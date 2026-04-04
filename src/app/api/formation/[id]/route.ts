@@ -3,11 +3,14 @@ import { NextRequest, NextResponse } from 'next/server';
 import { loadTestCase, loadCalibration, saveCalibration } from '@/lib/testbed/data-loader';
 import type { OrientationCalibration } from '@/lib/testbed/data-loader';
 import { loadFormationData } from '@/lib/testbed/formation-loader';
+import { discoverGoProVideos, extractGoProVideoInfo } from '@/lib/testbed/gopro-telemetry';
+import type { GoProVideoInfo } from '@/lib/testbed/gopro-telemetry';
 
 function serializeFormation(
   formationData: ReturnType<typeof loadFormationData>,
-  metadata: { dropzone: { lat_deg: number; lon_deg: number; elevation_m: number }; name: string },
-  calibration: OrientationCalibration | null
+  metadata: { dropzone: { lat_deg: number; lon_deg: number; elevation_m: number }; name: string; jumpers: string[] },
+  calibration: OrientationCalibration | null,
+  videos: GoProVideoInfo[]
 ) {
   return {
     ...formationData,
@@ -19,6 +22,7 @@ function serializeFormation(
     },
     testCaseName: metadata.name,
     calibration,
+    videos,
   };
 }
 
@@ -56,8 +60,18 @@ export async function GET(
       );
     }
 
+    // Discover and extract GoPro video telemetry
+    const videoFiles = discoverGoProVideos(testCaseId, testCase.metadata.jumpers);
+    const videos: GoProVideoInfo[] = [];
+    for (const vf of videoFiles) {
+      const info = await extractGoProVideoInfo(
+        testCaseId, vf.jumperId, vf.fileName, vf.serveName, formationData.startTime
+      );
+      if (info) videos.push(info);
+    }
+
     return NextResponse.json(
-      serializeFormation(formationData, testCase.metadata, calibration)
+      serializeFormation(formationData, testCase.metadata, calibration, videos)
     );
   } catch (error) {
     console.error('Formation load error:', error);
@@ -94,8 +108,18 @@ export async function PATCH(
     // Rebuild with new calibration
     const formationData = loadFormationData(testCaseId, testCase.metadata, calibration);
 
+    // Re-use cached video telemetry (no re-extraction needed for calibration changes)
+    const videoFiles = discoverGoProVideos(testCaseId, testCase.metadata.jumpers);
+    const videos: GoProVideoInfo[] = [];
+    for (const vf of videoFiles) {
+      const info = await extractGoProVideoInfo(
+        testCaseId, vf.jumperId, vf.fileName, vf.serveName, formationData.startTime
+      );
+      if (info) videos.push(info);
+    }
+
     return NextResponse.json(
-      serializeFormation(formationData, testCase.metadata, calibration)
+      serializeFormation(formationData, testCase.metadata, calibration, videos)
     );
   } catch (error) {
     console.error('Calibration save error:', error);

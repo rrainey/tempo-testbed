@@ -10,6 +10,8 @@ import type { AltitudeMode, ParticipantData, ProjectedPosition } from '../../lib
 import type { GeodeticCoordinates } from '../../lib/formation/types';
 import { createHumanoidMesh, disposeHumanoidMesh } from './HumanoidMesh';
 import { createAxisIndicators, disposeAxisIndicators } from './AxisIndicator';
+import { VideoOverlay } from './VideoOverlay';
+import type { VideoInfo } from './VideoOverlay';
 
 export interface FormationData {
   id: string;
@@ -35,6 +37,7 @@ interface FormationViewerProps {
   dzCenter: GeodeticCoordinates;
   altitudeMode: AltitudeMode;
   calibration?: CalibrationState | null;
+  videos?: VideoInfo[];
   onAltitudeModeChange?: (mode: AltitudeMode) => void;
   onBaseChange?: (newBaseId: string) => void;
   onTimeChange?: (time: number) => void;
@@ -90,6 +93,7 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
   dzCenter,
   altitudeMode,
   calibration,
+  videos,
   onAltitudeModeChange,
   onBaseChange,
   onTimeChange,
@@ -128,6 +132,7 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
   const [showGrid, setShowGrid] = useState(true);
   const [showAxes, setShowAxes] = useState(true);
   const [showAxisIndicators, setShowAxisIndicators] = useState(false);
+  const [activeVideo, setActiveVideo] = useState<VideoInfo | null>(null);
 
   // ── scene initialisation ──
   useEffect(() => {
@@ -513,17 +518,28 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
   // ── render ──
   return (
     <Stack gap="md" style={{ width: '100%' }}>
-      {/* 3D viewport */}
-      <div
-        ref={mountRef}
-        style={{
-          width: '100%',
-          height: '600px',
-          border: '1px solid #444',
-          borderRadius: '8px',
-          overflow: 'hidden',
-        }}
-      />
+      {/* 3D viewport with optional video overlay */}
+      <div style={{ position: 'relative', width: '100%', height: '600px' }}>
+        <div
+          ref={mountRef}
+          style={{
+            width: '100%',
+            height: '100%',
+            border: '1px solid #444',
+            borderRadius: '8px',
+            overflow: 'hidden',
+          }}
+        />
+        {activeVideo && (
+          <VideoOverlay
+            video={activeVideo}
+            formationTime={currentTime}
+            isPlaying={isPlaying}
+            onFormationTimeChange={t => { setCurrentTime(t); onTimeChange?.(t); }}
+            onClose={() => setActiveVideo(null)}
+          />
+        )}
+      </div>
 
       {/* View controls */}
       <ViewControls currentView={viewMode} onViewChange={setViewMode} />
@@ -539,6 +555,21 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
         <Button variant={showAxisIndicators ? 'filled' : 'outline'} size="sm" onClick={() => setShowAxisIndicators(v => !v)}>
           Base Frame
         </Button>
+        {videos && videos.length > 0 && (
+          <Button
+            variant={activeVideo ? 'filled' : 'outline'}
+            size="sm"
+            onClick={() => {
+              if (activeVideo) {
+                setActiveVideo(null);
+              } else {
+                setActiveVideo(videos[0]);
+              }
+            }}
+          >
+            Video ({videos[0].jumperId})
+          </Button>
+        )}
         <Text size="sm" fw={500}>Altitude:</Text>
         <SegmentedControl
           value={altitudeMode}

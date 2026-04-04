@@ -13,15 +13,25 @@ import { FormationViewer } from '@/components/formation/FormationViewer';
 import { BaseInfoPanel } from '@/components/formation/BaseInfoPanel';
 import { JumperListPanel } from '@/components/formation/JumperListPanel';
 import type { FormationData, CalibrationState } from '@/components/formation/FormationViewer';
+import type { VideoInfo } from '@/components/formation/VideoOverlay';
 import type { GeodeticCoordinates } from '@/lib/formation/types';
 import { recalibrateForBase } from '@/lib/formation/coordinates';
 import type { AltitudeMode } from '@/lib/formation/coordinates';
+
+interface GoProVideoInfoApi {
+  fileName: string;
+  serveFileName: string;
+  jumperId: string;
+  videoDuration_sec: number;
+  videoToFormationOffset_sec: number | null;
+}
 
 interface FormationApiResponse extends Omit<FormationData, 'startTime'> {
   startTime: string; // ISO string from JSON
   dzCenter: GeodeticCoordinates;
   testCaseName: string;
   calibration?: CalibrationState | null;
+  videos?: GoProVideoInfoApi[];
 }
 
 export default function FormationPlaybackPage() {
@@ -39,6 +49,7 @@ export default function FormationPlaybackPage() {
   const [baseJumperId, setBaseJumperId] = useState('');
   const [altitudeMode, setAltitudeMode] = useState<AltitudeMode>('Barometric');
   const [calibration, setCalibration] = useState<CalibrationState | null>(null);
+  const [videos, setVideos] = useState<VideoInfo[]>([]);
 
   useEffect(() => {
     fetch(`/api/formation/${testCaseId}`)
@@ -58,6 +69,22 @@ export default function FormationPlaybackPage() {
         setBaseJumperId(data.baseJumperId);
         if (data.calibration) {
           setCalibration(data.calibration);
+        }
+
+        // Convert video info from API to VideoInfo with streaming URLs
+        if (data.videos && data.videos.length > 0) {
+          setVideos(data.videos
+            .filter(v => v.videoToFormationOffset_sec !== null)
+            .map(v => ({
+              // Use _web.mp4 (H.264, faststart) if available, else original via virtual faststart API
+              src: v.serveFileName !== v.fileName
+                ? `/api/video/${testCaseId}/${v.jumperId}/${v.serveFileName}`
+                : `/api/video/${testCaseId}/${v.jumperId}/${v.fileName}`,
+              jumperId: v.jumperId,
+              duration_sec: v.videoDuration_sec,
+              videoToFormationOffset_sec: v.videoToFormationOffset_sec!,
+            }))
+          );
         }
 
         // Set initial time to timeline start (10s before first exit) or data start
@@ -186,6 +213,7 @@ export default function FormationPlaybackPage() {
               onTimeChange={handleTimeChange}
               onCalibrationChange={setCalibration}
               onCalibrationSave={handleCalibrationSave}
+              videos={videos}
             />
           </Grid.Col>
 
