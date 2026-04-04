@@ -128,6 +128,11 @@ export function interpolatePosition(
     ? before.adjBaroAlt_ftAGL + t * (after.adjBaroAlt_ftAGL - before.adjBaroAlt_ftAGL)
     : undefined;
 
+  // Linear interpolation for timeSinceMidnight_sec (cross-device alignment reference)
+  const timeSinceMidnight_sec = (before.timeSinceMidnight_sec != null && after.timeSinceMidnight_sec != null)
+    ? before.timeSinceMidnight_sec + t * (after.timeSinceMidnight_sec - before.timeSinceMidnight_sec)
+    : (before.timeSinceMidnight_sec ?? after.timeSinceMidnight_sec);
+
   // Use latest values for track and speed (more accurate than interpolation)
   const groundtrack_degT = after.groundtrack_degT || before.groundtrack_degT;
   const groundspeed_kmph = after.groundspeed_kmph || before.groundspeed_kmph;
@@ -143,6 +148,7 @@ export function interpolatePosition(
 
   return {
     timeOffset,
+    timeSinceMidnight_sec,
     location,
     baroAlt_ft,
     adjBaroAlt_ftAGL,
@@ -153,6 +159,62 @@ export function interpolatePosition(
     orientation_q,
     isInterpolated
   };
+}
+
+/**
+ * Interpolate position at a given timeSinceMidnight_sec value.
+ * Used for cross-device alignment: given an absolute UTC-derived time,
+ * find the position in any device's timeline.
+ */
+export function interpolateAtMidnightTime(
+  timeSeries: TimeSeriesPoint[],
+  targetMidnightSec: number
+): (TimeSeriesPoint & { isInterpolated: boolean }) | null {
+  if (timeSeries.length === 0) return null;
+
+  // Find first and last entries with timeSinceMidnight_sec
+  let firstIdx = -1;
+  let lastIdx = -1;
+  for (let i = 0; i < timeSeries.length; i++) {
+    if (timeSeries[i].timeSinceMidnight_sec != null) {
+      if (firstIdx === -1) firstIdx = i;
+      lastIdx = i;
+    }
+  }
+  if (firstIdx === -1) return null;
+
+  // Clamp to bounds
+  if (targetMidnightSec <= timeSeries[firstIdx].timeSinceMidnight_sec!) {
+    return { ...timeSeries[firstIdx], isInterpolated: false };
+  }
+  if (targetMidnightSec >= timeSeries[lastIdx].timeSinceMidnight_sec!) {
+    return { ...timeSeries[lastIdx], isInterpolated: false };
+  }
+
+  // Find bracketing samples
+  let before = timeSeries[firstIdx];
+  let after = timeSeries[firstIdx];
+  for (let i = firstIdx; i < lastIdx; i++) {
+    const cur = timeSeries[i];
+    const next = timeSeries[i + 1];
+    if (cur.timeSinceMidnight_sec != null && next.timeSinceMidnight_sec != null &&
+        cur.timeSinceMidnight_sec <= targetMidnightSec &&
+        next.timeSinceMidnight_sec > targetMidnightSec) {
+      before = cur;
+      after = next;
+      break;
+    }
+  }
+
+  // Compute interpolation factor in midnight-time space, then convert
+  // to the equivalent timeOffset and delegate to interpolatePosition()
+  // so all field interpolation logic stays in one place.
+  const dt = after.timeSinceMidnight_sec! - before.timeSinceMidnight_sec!;
+  if (dt === 0) return { ...before, isInterpolated: false };
+  const t = (targetMidnightSec - before.timeSinceMidnight_sec!) / dt;
+  const interpTimeOffset = before.timeOffset + t * (after.timeOffset - before.timeOffset);
+
+  return interpolatePosition(timeSeries, interpTimeOffset);
 }
 
 /**
@@ -238,9 +300,13 @@ export function projectFormationAtTime(
     throw new Error('Base jumper not found or has no data');
   }
 
-  // Interpolate base position at current time
+  // Interpolate base position at current time (using base jumper's own timeOffset)
   const baseData = interpolatePosition(baseParticipant.timeSeries, timeOffset);
   const baseNEDPos = wgs84ToNEDDZ(baseData.location, dzCenter);
+
+  // The base jumper's timeSinceMidnight_sec at this slider position — used to
+  // look up all other participants at the same real-world instant.
+  const baseMidnightSec = baseData.timeSinceMidnight_sec;
 
   // Use the jump run track established at exit, not the instantaneous GPS ground track.
   // The base exit frame azimuth is fixed for the entire jump.
@@ -256,8 +322,18 @@ export function projectFormationAtTime(
   return participants
     .filter(p => p.isVisible && p.timeSeries.length > 0)
     .map(participant => {
-      // Interpolate participant position
-      const data = interpolatePosition(participant.timeSeries, timeOffset);
+      // For the base jumper, use timeOffset directly (already computed).
+      // For other participants, use timeSinceMidnight_sec for cross-device
+      // alignment so that all positions correspond to the same UTC instant.
+      let data: TimeSeriesPoint & { isInterpolated: boolean };
+      if (participant.userId === baseJumperId) {
+        data = baseData;
+      } else if (baseMidnightSec != null) {
+        const synced = interpolateAtMidnightTime(participant.timeSeries, baseMidnightSec);
+        data = synced ?? interpolatePosition(participant.timeSeries, timeOffset);
+      } else {
+        data = interpolatePosition(participant.timeSeries, timeOffset);
+      }
 
       // Transform to NED,DZ then to Base Exit Frame
       const nedPos = wgs84ToNEDDZ(data.location, dzCenter);
@@ -333,6 +409,7 @@ export function recalibrateForBase(
 // Type definitions for the module
 export interface TimeSeriesPoint {
   timeOffset: number;
+  timeSinceMidnight_sec?: number;  // seconds since midnight UTC — common across all devices
   timestamp?: Date;
   location: GeodeticCoordinates;
   baroAlt_ft: number;

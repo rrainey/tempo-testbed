@@ -1,5 +1,6 @@
 import {
   projectFormationAtTime,
+  interpolateAtMidnightTime,
   ParticipantData,
   TimeSeriesPoint,
 } from '../coordinates';
@@ -187,6 +188,106 @@ describe('projectFormationAtTime: base-frame output', () => {
 
       expect(rw.position.z).toBeCloseTo(3, 0);
       expect(lw.position.z).toBeCloseTo(-3, 0);
+    });
+  });
+
+  // -----------------------------------------------------------------------
+  // Cross-device time alignment via timeSinceMidnight_sec
+  //
+  // Two jumpers at the same physical location, but their device log
+  // timelines are offset by 1 second (russ's log started 1s later).
+  // Without midnight-time alignment, raw timeOffset lookup would place
+  // russ at a position 1 second stale.
+  // -----------------------------------------------------------------------
+
+  describe('cross-device time alignment via timeSinceMidnight_sec', () => {
+    // Two GPS positions 50m apart along the jump run (south = forward on 180° heading)
+    const posA = offsetGPS(DZ, 500, 0, EXIT_ALT - DZ.alt_m);
+    const posB = offsetGPS(DZ, 450, 0, EXIT_ALT - DZ.alt_m); // 50m south (forward)
+
+    // Scott's timeline: log started at midnight+50000s
+    // At timeOffset=10 (midnightSec=50010), scott is at posA
+    const scottSeries: TimeSeriesPoint[] = [
+      { timeOffset: 0,  timeSinceMidnight_sec: 50000, location: posA, baroAlt_ft: 13000, groundtrack_degT: TRACK },
+      { timeOffset: 10, timeSinceMidnight_sec: 50010, location: posA, baroAlt_ft: 13000, groundtrack_degT: TRACK },
+      { timeOffset: 20, timeSinceMidnight_sec: 50020, location: posA, baroAlt_ft: 13000, groundtrack_degT: TRACK },
+    ];
+
+    // Russ's log started 1s later: his timeOffset=0 → midnightSec=50001
+    // At timeOffset=9 (midnightSec=50010), russ is at posA (same spot as scott@10)
+    // At timeOffset=10 (midnightSec=50011), russ has moved to posB
+    const russSeries: TimeSeriesPoint[] = [
+      { timeOffset: 0,  timeSinceMidnight_sec: 50001, location: posB, baroAlt_ft: 13000, groundtrack_degT: TRACK },
+      { timeOffset: 9,  timeSinceMidnight_sec: 50010, location: posA, baroAlt_ft: 13000, groundtrack_degT: TRACK },
+      { timeOffset: 10, timeSinceMidnight_sec: 50011, location: posB, baroAlt_ft: 13000, groundtrack_degT: TRACK },
+      { timeOffset: 20, timeSinceMidnight_sec: 50021, location: posB, baroAlt_ft: 13000, groundtrack_degT: TRACK },
+    ];
+
+    const participants: ParticipantData[] = [
+      { userId: 'scott', jumpLogId: 'log-scott', name: 'Scott', color: '#fff',
+        isBase: true, isVisible: true, timeSeries: scottSeries },
+      { userId: 'russ', jumpLogId: 'log-russ', name: 'Russ', color: '#f00',
+        isBase: false, isVisible: true, timeSeries: russSeries },
+    ];
+
+    test('russ is aligned by midnight time, not raw timeOffset', () => {
+      // At scott's timeOffset=10 (midnightSec=50010), russ should be at posA
+      // (his timeOffset=9, midnightSec=50010), not posB (his timeOffset=10)
+      const projected = projectFormationAtTime(
+        participants, 10, 'scott', DZ, 'GPS', TRACK);
+      const russ = projected.find(p => p.userId === 'russ')!;
+
+      // Both at posA → positions should be nearly identical → near-zero offset
+      expect(Math.abs(russ.position.x)).toBeLessThan(1);
+      expect(Math.abs(russ.position.y)).toBeLessThan(1);
+      expect(Math.abs(russ.position.z)).toBeLessThan(1);
+    });
+
+    test('interpolateAtMidnightTime finds correct position by midnight time', () => {
+      // Look up russ at midnightSec=50010 → should return position at timeOffset=9
+      const result = interpolateAtMidnightTime(russSeries, 50010);
+      expect(result).not.toBeNull();
+      expect(result!.timeOffset).toBeCloseTo(9, 5);
+      // Position should match posA
+      expect(result!.location.lat_deg).toBeCloseTo(posA.lat_deg, 6);
+      expect(result!.location.lon_deg).toBeCloseTo(posA.lon_deg, 6);
+    });
+
+    test('interpolateAtMidnightTime interpolates between samples', () => {
+      // midnightSec=50010.5 → halfway between russ's timeOffset=9 and timeOffset=10
+      const result = interpolateAtMidnightTime(russSeries, 50010.5);
+      expect(result).not.toBeNull();
+      expect(result!.timeOffset).toBeCloseTo(9.5, 5);
+    });
+
+    test('interpolateAtMidnightTime returns null for empty series', () => {
+      expect(interpolateAtMidnightTime([], 50010)).toBeNull();
+    });
+
+    test('interpolateAtMidnightTime returns null when no midnight times present', () => {
+      const noMidnight: TimeSeriesPoint[] = [
+        { timeOffset: 0, location: posA, baroAlt_ft: 13000 },
+      ];
+      expect(interpolateAtMidnightTime(noMidnight, 50010)).toBeNull();
+    });
+
+    test('without timeSinceMidnight_sec, raw timeOffset would show ~50m error', () => {
+      // Strip midnight times to simulate the old behavior
+      const noMidnight = participants.map(p => ({
+        ...p,
+        timeSeries: p.timeSeries.map(ts => {
+          const { timeSinceMidnight_sec: _, ...rest } = ts;
+          return rest;
+        }),
+      }));
+
+      const projected = projectFormationAtTime(
+        noMidnight, 10, 'scott', DZ, 'GPS', TRACK);
+      const russ = projected.find(p => p.userId === 'russ')!;
+
+      // Without sync, russ at timeOffset=10 is at posB, 50m from posA
+      // In the base exit frame (heading 180°), 50m south = 50m forward
+      expect(russ.position.x).toBeCloseTo(50, 0);
     });
   });
 

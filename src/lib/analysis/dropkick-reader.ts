@@ -25,6 +25,7 @@ export interface Vector3 {
 export interface KMLDataV1 {
 	seq: number,							// sequence number (integer)
 	timeOffset:	number,						// seconds since start
+	timeSinceMidnight_sec: number | null,	// seconds since midnight UTC on the log's calendar date (ms resolution)
 	timestamp: Date | null,
 	location: GeodeticCoordinates | null,
 	groundtrack_degT: number | null,
@@ -366,6 +367,7 @@ export class DropkickReader {
 		return {
 			seq: 0,
 			timeOffset: 0,
+			timeSinceMidnight_sec: null,
 			timestamp: null,
 			location: null,
 			groundtrack_degT: null,
@@ -515,6 +517,7 @@ export class DropkickReader {
 						if (this.currentCalendarDate !== undefined && this.startDate !== null && this.startDate !== undefined) {
 							correctedTimestamp = new Date( this.currentCalendarDate.getTime() + timePortion_ms);
 							this.curEntry.timeOffset = (correctedTimestamp.getTime() - this.startDate.getTime()) / 1000.0;
+							this.curEntry.timeSinceMidnight_sec = timePortion_ms / 1000.0;
 						}
 						this.lastTimeOffset_sec = this.curEntry.timeOffset;
 						this.curEntry.timestamp = correctedTimestamp;

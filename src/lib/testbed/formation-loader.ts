@@ -62,6 +62,7 @@ export function kmlToTimeSeries(entries: KMLDataV1[]): TimeSeriesPoint[] {
 
     result.push({
       timeOffset: entry.timeOffset,
+      timeSinceMidnight_sec: entry.timeSinceMidnight_sec ?? undefined,
       timestamp: entry.timestamp ?? undefined,
       location: entry.location,
       baroAlt_ft: entry.baroAlt_ft ?? 0,
