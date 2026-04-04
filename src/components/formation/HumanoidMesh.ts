@@ -2,15 +2,17 @@
 //
 // Procedural Three.js humanoid figure in standard freefall arch position.
 //
-// Body frame convention (matches docs/tempo-imu-orientation-estimation.md):
-//   Local +X = out of chest (points "down" in stable belly-to-earth freefall)
-//   Local +Y = right
-//   Local +Z = down (feet direction when standing)
+// At identity quaternion, the mesh represents a standing person in the
+// Base Frame, mapped to Three.js world via baseFrameToWorld():
 //
-// The mesh is built so that in its default (identity quaternion) pose,
-// the figure is in a belly-to-earth arch with chest facing -Z in Three.js
-// local space. The orientation quaternion from the pipeline rotates the
-// figure into the correct body attitude.
+//   Base Frame        Three.js local
+//   +X (chest/fwd) →  +X
+//   +Y (right)     →  +Z
+//   -Z (head/up)   →  +Y
+//
+// The orientation_q from the calibration + AHRS pipeline rotates this
+// identity pose into the actual body attitude within the Base Frame.
+// The Base→Three.js quaternion conversion then maps it to world space.
 
 import * as THREE from 'three';
 
@@ -152,25 +154,17 @@ export function createHumanoidMesh(color: string): THREE.Group {
   leftLowerLeg.rotation.x = -Math.PI / 2 * 0.8;
   leftUpperLeg.add(leftLowerLeg);
 
-  // ── Final rotation to align construction space → body frame ──
-  // Construction: built lying flat with head at +Z, chest at +Y
-  // Body frame: +X_b = out of chest, +Y_b = right, +Z_b = down (standing)
+  // ── Final rotation: construction space → Three.js local (= Base Frame mapped) ──
   //
-  // In arch (belly-to-earth): chest faces DOWN in world.
-  // Default orientation (identity q): figure should be in belly-down arch.
+  // Construction space: chest=+Y, right=+X, head=+Z
+  // Three.js local at identity (matching Base Frame via baseFrameToWorld):
+  //   chest → +X,  head → +Y,  right → +Z
   //
-  // We rotate the inner group so:
-  //   Construction +Z (head direction) → local -X (head forward in freefall)
-  //   Construction +Y (chest direction) → local -Z (chest faces down = +X_b direction)
-  //   Construction +X (right) → local +Y (right = +Y_b)
-  //
-  // This is achieved by wrapping in a parent pivot group with the correct rotation.
+  // Mapping: Xc→+Z, Yc→+X, Zc→+Y  →  Euler XYZ = (-π/2, 0, -π/2)
   const pivotGroup = new THREE.Group();
   const innerGroup = group;
 
-  // Rotate: X_construction → Y_body, Y_construction → -Z_body, Z_construction → -X_body
-  // This is a -90° rotation around X, then a 180° around Y
-  innerGroup.rotation.set(-Math.PI / 2, Math.PI, 0);
+  innerGroup.rotation.set(-Math.PI / 2, 0, -Math.PI / 2);
 
   pivotGroup.add(innerGroup);
   return pivotGroup;

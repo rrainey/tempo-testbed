@@ -75,16 +75,17 @@ function baseFrameToWorld(pos: { x: number; y: number; z: number }): THREE.Vecto
 }
 
 /**
- * Fixed quaternion that rotates the humanoid mesh from its default local-frame
- * orientation to belly-to-earth in Three.js world space.
+ * Convert a quaternion from the Base Frame to Three.js world space.
  *
- * Mesh body axes at identity:  X(chest)→3js+Z, Y(right)→3js+X, Z(feet)→3js+Y
- * Belly-to-earth requires:     X(chest)→3js-Y, Y(right)→3js+Z, Z(feet)→3js-X
+ * Base Frame axes map to Three.js via: X→X, Y→Z, Z→-Y.
+ * For quaternion q = w + xi + yj + zk in Base Frame:
+ *   i→i', j→k', k→-j'  ⟹  Three.js (w, x, -z, y)
  *
- * Derived from the rotation matrix mapping current→desired: q=(w=0.5, x=0.5, y=-0.5, z=0.5)
- * Three.js Quaternion constructor order: (x, y, z, w)
+ * Three.js Quaternion constructor: (x, y, z, w)
  */
-const BELLY_DOWN_Q = new THREE.Quaternion(0.5, -0.5, 0.5, 0.5);
+function baseQuatToWorld(q: { w: number; x: number; y: number; z: number }): THREE.Quaternion {
+  return new THREE.Quaternion(q.x, -q.z, q.y, q.w);
+}
 
 // ─── component ──────────────────────────────────────────────────
 
@@ -308,23 +309,16 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
 
       // Apply orientation quaternion if available.
       //
-      // orientation_q is a relative rotation from the calibration pose
-      // (identity = belly-down).  It must be composed with:
-      //   1. BELLY_DOWN_Q: maps the mesh's default pose to belly-to-earth
-      //      in Three.js world (body X/chest → 3js -Y/down, body Y/right → 3js +Z).
-      //   2. NED-to-Three.js conversion of orientation_q: negate x, y.
-      //   3. Per-jumper azimuth yaw (client-side, about Three.js Y).
+      // orientation_q is in the Base Frame. Convert to Three.js world space
+      // via baseQuatToWorld (same axis permutation as baseFrameToWorld for positions).
+      // The mesh at identity already matches the Base Frame convention.
       //
-      // Final composition: group.quaternion = yaw * orientation_3js * BELLY_DOWN_Q
+      // Per-jumper azimuth yaw is applied in Three.js world space (about Y = up).
       if (pos.orientation_q) {
-        const q = pos.orientation_q;
-        const orientQ = new THREE.Quaternion(-q.x, -q.y, q.z, q.w);
-
-        // Compose: orientation (in 3js space) * belly-down base pose
-        const meshQ = orientQ.multiply(BELLY_DOWN_Q.clone());
+        const meshQ = baseQuatToWorld(pos.orientation_q);
 
         // Apply per-jumper azimuth offset for real-time visual feedback.
-        // Yaw about Three.js Y (world up) in world space.
+        // Azimuth is a yaw about Base -Z (up) = Three.js +Y.
         const azDeg = calibration?.jumperAzimuths?.[pos.userId] ?? 0;
         if (azDeg !== 0) {
           const azRad = azDeg * Math.PI / 180;

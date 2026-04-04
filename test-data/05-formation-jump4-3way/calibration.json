@@ -1,9 +1,9 @@
 {
   "method": "humanAssisted",
-  "calibrationTimeOffset": 887.4,
+  "calibrationTimeOffset": 883.9,
   "jumperAzimuths": {
     "scott": 0,
-    "riley": 137,
-    "russ": 321
+    "riley": 133,
+    "russ": 131
   }
 }

@@ -697,15 +697,33 @@ export function calibrateOrientationHumanAssisted(
 }
 
 /**
+ * Belly-to-earth rotation in the Base Frame.
+ *
+ * The mesh at identity is a standing person (chest→+X, head→-Z).
+ * During stable belly-to-earth freefall, the chest points toward +Z (earth/down).
+ * This is a -90° pitch about the +Y axis (right):
+ *   +X (chest) → +Z (down)
+ *   -Z (head)  → +X (forward along track)
+ */
+const Q_BELLY_DOWN: Quaternion = {
+  w: Math.cos(-Math.PI / 4),  // cos(-45°) = 0.7071
+  x: 0,
+  y: Math.sin(-Math.PI / 4),  // sin(-45°) = -0.7071
+  z: 0,
+};
+
+/**
  * Interpolate PIM2 quaternions to time points using human-assisted calibration.
  *
- * At each time t:
- *   orientation_q(t) = q_R_to_D(t) ⊗ conj(q_ref)
+ * The mesh identity pose is standing (chest→+X).  At calibration time the
+ * jumper is belly-to-earth, so we premultiply by Q_BELLY_DOWN.  The AHRS
+ * relative rotation from calibration tracks further attitude changes.
  *
- * At t_cal this is identity (belly-down).  At other times it gives the
- * relative rotation of the device/body from the calibration pose.
- * Heading (yaw) is arbitrary — resolved by the user's azimuth wheel
- * on the client side.
+ *   orientation_q(t) = Q_BELLY_DOWN ⊗ q_R_to_D(t) ⊗ conj(q_ref)
+ *
+ * At t_cal: Q_BELLY_DOWN ⊗ identity = Q_BELLY_DOWN (belly-to-earth pose).
+ * At other times: AHRS-tracked rotation composes on top.
+ * Heading (yaw) is resolved by the user's azimuth wheel on the client.
  */
 export function interpolateQuaternionsHumanAssisted(
   im2Packets: IM2Packet[],
@@ -743,9 +761,12 @@ export function interpolateQuaternionsHumanAssisted(
     const q_after: Quaternion = { w: after.q0, x: after.q1, y: after.q2, z: after.q3 };
     const q_R_to_D = slerp(q_before, q_after, t);
 
-    // Relative rotation from calibration pose: identity at t_cal,
-    // tracks physical rotation at all other times.
-    const q_out = qNormalize(qMultiply(q_R_to_D, q_ref_inv));
+    // AHRS-relative rotation from calibration pose
+    const q_delta = qNormalize(qMultiply(q_R_to_D, q_ref_inv));
+
+    // Premultiply belly-down: at t_cal this gives the belly-down pose,
+    // at other times the AHRS delta composes on top.
+    const q_out = qNormalize(qMultiply(Q_BELLY_DOWN, q_delta));
 
     results.push({ timeOffset: targetT, q: q_out });
   }
