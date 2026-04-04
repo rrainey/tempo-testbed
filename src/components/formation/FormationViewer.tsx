@@ -9,6 +9,7 @@ import { projectFormationAtTime } from '../../lib/formation/coordinates';
 import type { AltitudeMode, ParticipantData, ProjectedPosition } from '../../lib/formation/coordinates';
 import type { GeodeticCoordinates } from '../../lib/formation/types';
 import { createHumanoidMesh, disposeHumanoidMesh } from './HumanoidMesh';
+import { createAxisIndicators, disposeAxisIndicators } from './AxisIndicator';
 
 export interface FormationData {
   id: string;
@@ -108,6 +109,7 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
     frameId: number;
     jumperMeshes: Map<string, THREE.Group>;
     trailLines: Map<string, THREE.Line>;
+    axisIndicators: THREE.Group | null;
     disposed: boolean;
   } | null>(null);
 
@@ -125,6 +127,7 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
   const [baseJumperId, setBaseJumperId] = useState(formation.baseJumperId);
   const [showGrid, setShowGrid] = useState(true);
   const [showAxes, setShowAxes] = useState(true);
+  const [showAxisIndicators, setShowAxisIndicators] = useState(false);
 
   // ── scene initialisation ──
   useEffect(() => {
@@ -160,6 +163,11 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
     const axes = new THREE.AxesHelper(50);
     scene.add(axes);
 
+    // Base Frame axis indicators (off by default)
+    const axisInd = createAxisIndicators();
+    axisInd.visible = false;
+    scene.add(axisInd);
+
     // Lighting
     scene.add(new THREE.AmbientLight(0xffffff, 0.6));
     const dirLight = new THREE.DirectionalLight(0xffffff, 0.4);
@@ -177,6 +185,7 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
       frameId: 0,
       jumperMeshes: new Map<string, THREE.Group>(),
       trailLines: new Map<string, THREE.Line>(),
+      axisIndicators: axisInd,
       disposed: false,
     };
     threeRef.current = ctx;
@@ -224,6 +233,11 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
         (line.material as THREE.Material).dispose();
       });
       ctx.trailLines.clear();
+
+      if (ctx.axisIndicators) {
+        scene.remove(ctx.axisIndicators);
+        disposeAxisIndicators(ctx.axisIndicators);
+      }
 
       controls.dispose();
       renderer.dispose();
@@ -450,7 +464,8 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
     if (!ctx || ctx.disposed) return;
     ctx.grid.visible = showGrid;
     ctx.axes.visible = showAxes;
-  }, [showGrid, showAxes]);
+    if (ctx.axisIndicators) ctx.axisIndicators.visible = showAxisIndicators;
+  }, [showGrid, showAxes, showAxisIndicators]);
 
   // ── notify parent of time changes ──
   useEffect(() => {
@@ -520,6 +535,9 @@ export const FormationViewer: React.FC<FormationViewerProps> = ({
         </Button>
         <Button variant={showAxes ? 'filled' : 'outline'} size="sm" onClick={() => setShowAxes(v => !v)}>
           Axes
+        </Button>
+        <Button variant={showAxisIndicators ? 'filled' : 'outline'} size="sm" onClick={() => setShowAxisIndicators(v => !v)}>
+          Base Frame
         </Button>
         <Text size="sm" fw={500}>Altitude:</Text>
         <SegmentedControl

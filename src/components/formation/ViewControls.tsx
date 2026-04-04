@@ -26,16 +26,17 @@ export const VIEW_CONFIGURATIONS: Record<string, ViewConfiguration> = {
     name: "Overhead View",
     description: "Looking down from above",
     icon: <IconEye size={18} />,
-    // Camera above on +Y, looking down. Up = -X so forward points up on screen.
+    // Camera above on +Y, looking down. Up = +X so forward (+X) points up on screen.
     cameraPosition: { x: 0, y: 200, z: 0 },
-    cameraUp: { x: -1, y: 0, z: 0 },
+    cameraUp: { x: 1, y: 0, z: 0 },
   },
   side: {
     name: "Side View",
     description: "Looking from the side (perpendicular to jump run)",
     icon: <IconArrowsHorizontal size={18} />,
-    // Camera on +Z (right side), looking at origin. Screen: X=forward, Y=up.
-    cameraPosition: { x: 0, y: 0, z: 200 },
+    // Camera on -Z (left side), looking at origin along +Z.
+    // Screen: +X points left (forward), +Y points up.
+    cameraPosition: { x: 0, y: 0, z: -200 },
     cameraUp: { x: 0, y: 1, z: 0 },
   },
   trailing: {
