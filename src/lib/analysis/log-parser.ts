@@ -23,9 +23,11 @@ export interface ParsedLogData {
   sampleRate: number; // Hz
   
   // Time series data
-  altitude: TimeSeriesPoint[]; // Altitude in feet (barometric)
+  altitude: TimeSeriesPoint[]; // Altitude in feet (barometric, AGL)
   vspeed: TimeSeriesPoint[]; // Vertical speed in fpm (feet per minute)
   gps: GPSPoint[]; // GPS positions with barometric altitude
+  gpsAltitude: TimeSeriesPoint[]; // GPS altitude in feet MSL
+  staticPressure: TimeSeriesPoint[]; // Raw static pressure in hPa
   
   // Raw parsed entries from DropkickReader
   logEntries: KMLDataV1[];
@@ -85,6 +87,8 @@ export class LogParser {
           altitude: [],
           vspeed: [],
           gps: [],
+          gpsAltitude: [],
+          staticPressure: [],
           logEntries: [],
           hasGPS: false,
           hasValidData: false,
@@ -106,9 +110,11 @@ export class LogParser {
       const altitude: TimeSeriesPoint[] = [];
       const vspeed: TimeSeriesPoint[] = [];
       const gps: GPSPoint[] = [];
-      
+      const gpsAltitude: TimeSeriesPoint[] = [];
+      const staticPressure: TimeSeriesPoint[] = [];
+
       let hasGPS = false;
-      
+
       for (const entry of logEntries) {
         // Use barometric altitude for altitude time series
         if (entry.baroAlt_ft !== null) {
@@ -117,7 +123,7 @@ export class LogParser {
             value: entry.baroAlt_ft
           });
         }
-        
+
         // Use rate of descent (converted to vertical speed)
         if (entry.rateOfDescent_fpm !== null) {
           vspeed.push({
@@ -125,10 +131,14 @@ export class LogParser {
             value: -entry.rateOfDescent_fpm // Convert RoD to vspeed (positive up)
           });
         }
-        
-        // GPS data - use GPS for lat/lon but barometric for altitude
+
+        // GPS altitude in feet MSL (from GNSS position fix)
         if (entry.location !== null) {
           hasGPS = true;
+          gpsAltitude.push({
+            timestamp: entry.timeOffset,
+            value: this.metersToFeet(entry.location.alt_m)
+          });
           gps.push({
             timestamp: entry.timeOffset,
             latitude: entry.location.lat_deg,
@@ -139,6 +149,14 @@ export class LogParser {
             groundTrack_degT: entry.groundtrack_degT ?? undefined
           });
         }
+
+        // Raw static pressure for noise analysis
+        if (entry.staticPressure_hPa !== null) {
+          staticPressure.push({
+            timestamp: entry.timeOffset,
+            value: entry.staticPressure_hPa
+          });
+        }
       }
       
       console.log(`[PARSER] Parsed successfully:`);
@@ -147,10 +165,12 @@ export class LogParser {
       console.log(`  - Entries: ${logEntries.length}`);
       console.log(`  - Sample rate: ${sampleRate.toFixed(2)} Hz`);
       console.log(`  - Altitude points: ${altitude.length}`);
+      console.log(`  - GPS altitude points: ${gpsAltitude.length}`);
+      console.log(`  - Static pressure points: ${staticPressure.length}`);
       console.log(`  - Vspeed points: ${vspeed.length}`);
       console.log(`  - GPS points: ${gps.length}`);
       console.log(`  - Log version: ${reader.logVersion} (${reader.logString})`);
-      
+
       return {
         startTime,
         duration,
@@ -158,6 +178,8 @@ export class LogParser {
         altitude,
         vspeed,
         gps,
+        gpsAltitude,
+        staticPressure,
         logEntries,
         hasGPS,
         hasValidData: true,
@@ -178,6 +200,8 @@ export class LogParser {
         altitude: [],
         vspeed: [],
         gps: [],
+        gpsAltitude: [],
+        staticPressure: [],
         logEntries: [],
         hasGPS: false,
         hasValidData: false,

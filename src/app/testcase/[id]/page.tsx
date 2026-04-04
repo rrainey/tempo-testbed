@@ -15,6 +15,7 @@ import {
 } from '@tabler/icons-react';
 import Link from 'next/link';
 import { JumpAltitudeChart } from '@/components/analysis/JumpAltitudeChart';
+import { AltitudeComparisonChart } from '@/components/analysis/AltitudeComparisonChart';
 import { VelocityBinChart } from '@/components/analysis/VelocityBinChart';
 import { notifications } from '@mantine/notifications';
 
@@ -48,6 +49,8 @@ interface AnalysisResult {
     altitude: { timestamp: number; value: number }[];
     vspeed: { timestamp: number; value: number }[];
     gps: any[];
+    gpsAltitude: { timestamp: number; value: number }[];
+    staticPressure: { timestamp: number; value: number }[];
     duration: number;
     sampleRate: number;
     hasGPS: boolean;
@@ -386,6 +389,16 @@ function JumperPanel({
               deploymentOffsetSec={result.events.deploymentOffsetSec ?? undefined}
               landingOffsetSec={result.events.landingOffsetSec ?? undefined}
               showVSpeed={false}
+            />
+          )}
+
+          {/* Altitude Source Comparison Chart */}
+          {result.timeSeries.altitude.length > 0 && (
+            <AltitudeComparisonChart
+              baroAltitudeData={result.timeSeries.altitude}
+              gpsAltitudeData={result.timeSeries.gpsAltitude ?? []}
+              staticPressureData={result.timeSeries.staticPressure ?? []}
+              dzSurfacePressureAltitude_m={result.timeSeries.dzSurfacePressureAltitude_m ?? 0}
             />
           )}
 
