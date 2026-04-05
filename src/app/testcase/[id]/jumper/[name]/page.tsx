@@ -12,9 +12,9 @@ import {
   IconRefresh, IconArrowUp, IconArrowDown, IconMinus, IconX
 } from '@tabler/icons-react';
 import Link from 'next/link';
-import { JumpAltitudeChart } from '@/components/analysis/JumpAltitudeChart';
-import { AltitudeComparisonChart } from '@/components/analysis/AltitudeComparisonChart';
-import { VelocityBinChart } from '@/components/analysis/VelocityBinChart';
+import { JumpAltitudeChart } from '@tempo/core/components/analysis/JumpAltitudeChart';
+import { AltitudeComparisonChart } from '@tempo/core/components/analysis/AltitudeComparisonChart';
+import { VelocityBinChart } from '@tempo/core/components/analysis/VelocityBinChart';
 import { notifications } from '@mantine/notifications';
 
 interface AnalysisResult {

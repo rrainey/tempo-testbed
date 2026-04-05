@@ -3,21 +3,21 @@
 // Bridge between the per-jumper analysis pipeline (KMLDataV1[])
 // and the formation viewer (ParticipantData[] / FormationData).
 
-import { LogParser } from '../analysis/log-parser';
-import type { ParsedLogData } from '../analysis/log-parser';
-import type { KMLDataV1 } from '../analysis/dropkick-reader';
-import { EventDetector } from '../analysis/event-detector';
-import type { JumpEvents } from '../analysis/event-detector';
-import { calibrateFallRate } from '../formation/coordinates';
-import type { TimeSeriesPoint, ParticipantData } from '../formation/coordinates';
+import { LogParser } from '@tempo/core/analysis/log-parser';
+import type { ParsedLogData } from '@tempo/core/analysis/log-parser';
+import type { KMLDataV1 } from '@tempo/core/analysis/dropkick-reader';
+import { EventDetector } from '@tempo/core/analysis/event-detector';
+import type { JumpEvents } from '@tempo/core/analysis/event-detector';
+import { calibrateFallRate } from '@tempo/core/formation/coordinates';
+import type { TimeSeriesPoint, ParticipantData } from '@tempo/core/formation/coordinates';
 import {
   estimateOrientation,
   interpolateQuaternionsToTimePoints,
   calibrateOrientationHumanAssisted,
   interpolateQuaternionsHumanAssisted,
-} from '../formation/orientation-estimator';
-import type { FormationData } from '../../components/formation/FormationViewer';
-import type { GeodeticCoordinates } from '../formation/types';
+} from '@tempo/core/formation/orientation-estimator';
+import type { FormationData } from '@tempo/core/components/formation/FormationViewer';
+import type { GeodeticCoordinates } from '@tempo/core/formation/types';
 import type { TestCaseMetadata, OrientationCalibration } from './data-loader';
 import { loadFlightData } from './data-loader';
 

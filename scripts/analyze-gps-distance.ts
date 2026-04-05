@@ -15,8 +15,8 @@
 
 import fs from 'fs';
 import path from 'path';
-import { LogParser } from '../src/lib/analysis/log-parser';
-import type { KMLDataV1 } from '../src/lib/analysis/dropkick-reader';
+import { LogParser } from '@tempo/core/analysis/log-parser';
+import type { KMLDataV1 } from '@tempo/core/analysis/dropkick-reader';
 
 // ─── Configuration ──────────────────────────────────────────────────
 const TEST_CASE = '05-formation-jump4-3way';

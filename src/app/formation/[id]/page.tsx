@@ -5,18 +5,19 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useParams } from 'next/navigation';
 import {
   Container, Title, Text, Group, Stack, Button,
-  Loader, Center, Alert, Anchor, Grid
+  Loader, Center, Alert, Anchor, Card, Divider,
+  SegmentedControl, Slider, Badge,
 } from '@mantine/core';
-import { IconAlertCircle, IconArrowLeft, IconAnalyze } from '@tabler/icons-react';
+import { IconAlertCircle, IconArrowLeft, IconAnalyze, IconDeviceFloppy } from '@tabler/icons-react';
 import Link from 'next/link';
-import { FormationViewer } from '@/components/formation/FormationViewer';
-import { BaseInfoPanel } from '@/components/formation/BaseInfoPanel';
-import { JumperListPanel } from '@/components/formation/JumperListPanel';
-import type { FormationData, CalibrationState } from '@/components/formation/FormationViewer';
-import type { VideoInfo } from '@/components/formation/VideoOverlay';
-import type { GeodeticCoordinates } from '@/lib/formation/types';
-import { recalibrateForBase } from '@/lib/formation/coordinates';
-import type { AltitudeMode } from '@/lib/formation/coordinates';
+import { FormationViewer } from '@tempo/core/components/formation/FormationViewer';
+import { BaseInfoPanel } from '@tempo/core/components/formation/BaseInfoPanel';
+import { JumperListPanel } from '@tempo/core/components/formation/JumperListPanel';
+import type { FormationData, CalibrationState } from '@tempo/core/components/formation/FormationViewer';
+import type { VideoInfo } from '@tempo/core/components/formation/VideoOverlay';
+import type { GeodeticCoordinates } from '@tempo/core/formation/types';
+import { recalibrateForBase } from '@tempo/core/formation/coordinates';
+import type { AltitudeMode } from '@tempo/core/formation/coordinates';
 
 interface GoProVideoInfoApi {
   fileName: string;
@@ -200,9 +201,9 @@ export default function FormationPlaybackPage() {
         </Group>
 
         {/* Main content: viewer + side panels */}
-        <Grid gutter="md">
-          {/* 3D Viewer — takes most of the width */}
-          <Grid.Col span={{ base: 12, lg: 9 }}>
+        <div style={{ display: 'flex', gap: 16 }}>
+          {/* 3D Viewer — takes remaining space */}
+          <div style={{ flex: 1, minWidth: 0 }}>
             <FormationViewer
               formation={formation}
               dzCenter={dzCenter}
@@ -211,15 +212,13 @@ export default function FormationPlaybackPage() {
               onAltitudeModeChange={setAltitudeMode}
               onBaseChange={handleBaseChange}
               onTimeChange={handleTimeChange}
-              onCalibrationChange={setCalibration}
-              onCalibrationSave={handleCalibrationSave}
               videos={videos}
             />
-          </Grid.Col>
+          </div>
 
-          {/* Side panels */}
-          <Grid.Col span={{ base: 12, lg: 3 }}>
-            <Stack gap="md">
+          {/* Side panels — fixed width, narrower */}
+          <div style={{ width: 280, flexShrink: 0 }}>
+            <Stack gap="sm">
               <BaseInfoPanel
                 formation={formation}
                 currentTime={currentTime}
@@ -233,9 +232,106 @@ export default function FormationPlaybackPage() {
                 dzCenter={dzCenter}
                 altitudeMode={altitudeMode}
               />
+
+              {/* Orientation Estimation — below Formation Participants */}
+              <Card withBorder>
+                <Stack gap="xs">
+                  <Title order={5}>Orientation Estimation</Title>
+                  <Divider />
+                  <SegmentedControl
+                    value={calibration?.method ?? 'automatic'}
+                    onChange={v => {
+                      const method = v as 'automatic' | 'humanAssisted';
+                      const updated: CalibrationState = {
+                        method,
+                        calibrationTimeOffset: calibration?.calibrationTimeOffset,
+                        jumperAzimuths: calibration?.jumperAzimuths ?? {},
+                      };
+                      setCalibration(updated);
+                      handleCalibrationSave(updated);
+                    }}
+                    data={[
+                      { label: 'Auto', value: 'automatic' },
+                      { label: 'Manual', value: 'humanAssisted' },
+                    ]}
+                    size="xs"
+                    fullWidth
+                  />
+
+                  {calibration?.method === 'humanAssisted' && (
+                    <Stack gap="xs">
+                      <Group gap="xs">
+                        <Text size="xs" c="dimmed">Cal time:</Text>
+                        <Text size="xs" fw={500}>
+                          {calibration.calibrationTimeOffset !== undefined
+                            ? `${calibration.calibrationTimeOffset.toFixed(1)}s`
+                            : '(not set)'}
+                        </Text>
+                        <Button
+                          size="compact-xs"
+                          variant="light"
+                          onClick={() => {
+                            const updated: CalibrationState = {
+                              ...calibration,
+                              calibrationTimeOffset: currentTime,
+                            };
+                            setCalibration(updated);
+                            handleCalibrationSave(updated);
+                          }}
+                        >
+                          Set ({currentTime.toFixed(1)}s)
+                        </Button>
+                      </Group>
+
+                      {formation.participants.map(p => (
+                        <Group key={p.userId} gap="xs" wrap="nowrap">
+                          <Badge
+                            color={p.color}
+                            variant="filled"
+                            size="xs"
+                            style={{ minWidth: 60 }}
+                          >
+                            {p.name}
+                          </Badge>
+                          <Text size="xs" style={{ minWidth: 35 }}>
+                            {(calibration.jumperAzimuths?.[p.userId] ?? 0).toFixed(0)}°
+                          </Text>
+                          <Slider
+                            value={calibration.jumperAzimuths?.[p.userId] ?? 0}
+                            onChange={v => {
+                              setCalibration({
+                                ...calibration,
+                                jumperAzimuths: {
+                                  ...calibration.jumperAzimuths,
+                                  [p.userId]: v,
+                                },
+                              });
+                            }}
+                            min={0}
+                            max={360}
+                            step={1}
+                            size="xs"
+                            style={{ flex: 1 }}
+                            label={v => `${v}°`}
+                          />
+                        </Group>
+                      ))}
+
+                      <Button
+                        size="compact-xs"
+                        leftSection={<IconDeviceFloppy size={12} />}
+                        onClick={() => calibration && handleCalibrationSave(calibration)}
+                        disabled={calibration.calibrationTimeOffset === undefined}
+                      >
+                        Save Calibration
+                      </Button>
+                    </Stack>
+                  )}
+                </Stack>
+              </Card>
             </Stack>
-          </Grid.Col>
-        </Grid>
+          </div>
+        </div>
       </Stack>
     </Container>
   );

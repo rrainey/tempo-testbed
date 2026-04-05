@@ -16,7 +16,9 @@
     "plugins": [{ "name": "next" }],
     "paths": {
       "@/*": ["./src/*"],
-      "@test-data/*": ["./test-data/*"]
+      "@test-data/*": ["./test-data/*"],
+      "@tempo/core": ["./node_modules/@tempo/core/src/index.ts"],
+      "@tempo/core/*": ["./node_modules/@tempo/core/src/*"]
     }
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts"],

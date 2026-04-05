@@ -1,9 +1,9 @@
 // lib/testbed/analysis-runner.ts
-import { LogParser } from '../analysis/log-parser';
-import { EventDetector } from '../analysis/event-detector';
-import { calibrateFallRate } from '../formation/coordinates';
-import type { ParsedLogData } from '../analysis/log-parser';
-import type { JumpEvents } from '../analysis/event-detector';
+import { LogParser } from '@tempo/core/analysis/log-parser';
+import { EventDetector } from '@tempo/core/analysis/event-detector';
+import { calibrateFallRate } from '@tempo/core/formation/coordinates';
+import type { ParsedLogData } from '@tempo/core/analysis/log-parser';
+import type { JumpEvents } from '@tempo/core/analysis/event-detector';
 import type { JumperBaseline } from './data-loader';
 
 export interface VelocityBinEntry {
