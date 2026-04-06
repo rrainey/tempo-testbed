@@ -2,6 +2,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import {
   Container, Title, Text, Card, Group, Badge, Stack,
   SimpleGrid, Button, Loader, Center, Alert, Anchor
@@ -27,6 +28,7 @@ interface TestCaseSummary {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [testCases, setTestCases] = useState<TestCaseSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -112,9 +114,11 @@ export default function DashboardPage() {
                     size="xs"
                     variant="light"
                     color="violet"
-                    component={Link}
-                    href={`/formation/${tc.id}`}
-                    onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                    onClick={(e: React.MouseEvent) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      router.push(`/formation/${tc.id}`);
+                    }}
                     style={{ cursor: 'pointer' }}
                   >
                     Formation
