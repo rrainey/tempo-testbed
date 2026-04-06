@@ -201,9 +201,9 @@ export default function FormationPlaybackPage() {
         </Group>
 
         {/* Main content: viewer + side panels */}
-        <div style={{ display: 'flex', gap: 16 }}>
+        <div style={{ display: 'flex', gap: 16, height: 'calc(100vh - 135px)' }}>
           {/* 3D Viewer — takes remaining space */}
-          <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ flex: 1, minWidth: 0, height: '100%' }}>
             <FormationViewer
               formation={formation}
               dzCenter={dzCenter}
@@ -216,8 +216,8 @@ export default function FormationPlaybackPage() {
             />
           </div>
 
-          {/* Side panels — fixed width, narrower */}
-          <div style={{ width: 280, flexShrink: 0 }}>
+          {/* Side panels */}
+          <div style={{ width: 380, flexShrink: 0, overflowY: 'auto' }}>
             <Stack gap="sm">
               <BaseInfoPanel
                 formation={formation}
