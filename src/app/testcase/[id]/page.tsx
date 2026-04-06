@@ -15,6 +15,7 @@ import {
 } from '@tabler/icons-react';
 import Link from 'next/link';
 import { JumpAltitudeChart } from '@tempo/core/components/analysis/JumpAltitudeChart';
+import { AccelerationChart } from '@tempo/core/components/analysis/AccelerationChart';
 import { AltitudeComparisonChart } from '@tempo/core/components/analysis/AltitudeComparisonChart';
 import { VelocityBinChart } from '@tempo/core/components/analysis/VelocityBinChart';
 import { notifications } from '@mantine/notifications';
@@ -51,6 +52,7 @@ interface AnalysisResult {
     gps: any[];
     gpsAltitude: { timestamp: number; value: number }[];
     staticPressure: { timestamp: number; value: number }[];
+    acceleration: { timestamp: number; value: number }[];
     duration: number;
     sampleRate: number;
     hasGPS: boolean;
@@ -389,6 +391,16 @@ function JumperPanel({
               deploymentOffsetSec={result.events.deploymentOffsetSec ?? undefined}
               landingOffsetSec={result.events.landingOffsetSec ?? undefined}
               showVSpeed={false}
+            />
+          )}
+
+          {/* IMU Acceleration Chart */}
+          {result.timeSeries.acceleration.length > 0 && (
+            <AccelerationChart
+              accelerationData={result.timeSeries.acceleration}
+              exitOffsetSec={result.events.exitOffsetSec ?? undefined}
+              deploymentOffsetSec={result.events.deploymentOffsetSec ?? undefined}
+              landingOffsetSec={result.events.landingOffsetSec ?? undefined}
             />
           )}
 

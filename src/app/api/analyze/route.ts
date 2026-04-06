@@ -58,6 +58,7 @@ export async function POST(request: NextRequest) {
         gps: result.parsedData.gps,
         gpsAltitude: result.parsedData.gpsAltitude,
         staticPressure: result.parsedData.staticPressure,
+        acceleration: result.parsedData.acceleration,
         duration: result.parsedData.duration,
         sampleRate: result.parsedData.sampleRate,
         hasGPS: result.parsedData.hasGPS,
