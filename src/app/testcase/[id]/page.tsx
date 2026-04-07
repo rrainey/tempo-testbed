@@ -177,7 +177,7 @@ export default function TestCasePage() {
                 component={Link}
                 href={`/formation/${testCaseId}`}
                 leftSection={<IconPlayerPlay size={16} />}
-                variant="light"
+                variant="filled"
                 color="violet"
               >
                 Formation Playback

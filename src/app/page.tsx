@@ -47,7 +47,7 @@ export default function DashboardPage() {
   }, []);
 
   return (
-    <Container size="lg" py="xl">
+    <Container fluid py="xl" px="xl">
       <Stack gap="lg">
         <div>
           <Title order={1} mb="xs" style={{ color: 'var(--mantine-primary-color-filled)' }}>
@@ -78,7 +78,7 @@ export default function DashboardPage() {
           </Alert>
         )}
 
-        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="lg">
+        <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 4, xl: 5 }} spacing="lg">
           {testCases.map(tc => (
             <Card key={tc.id} withBorder p="lg" radius="md"
               component={Link} href={`/testcase/${tc.id}`}
