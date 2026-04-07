@@ -168,7 +168,7 @@ export default function TestCasePage() {
                 <Group gap={4}><IconArrowLeft size={14} /> All Tests</Group>
               </Anchor>
             </Group>
-            <Title order={2} style={{ color: '#ddff55' }}>{testCase.metadata.name}</Title>
+            <Title order={2} style={{ color: 'var(--mantine-primary-color-filled)' }}>{testCase.metadata.name}</Title>
             <Text c="dimmed" size="sm">{testCase.metadata.description}</Text>
           </div>
           <Group>

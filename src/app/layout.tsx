@@ -1,34 +1,16 @@
 // app/layout.tsx
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
-import { MantineProvider, createTheme, ColorSchemeScript } from '@mantine/core';
-import { Notifications } from '@mantine/notifications';
+import './mantinehub/style.css';
+import { ColorSchemeScript } from '@mantine/core';
+import { GeistSans } from 'geist/font/sans';
 import type { Metadata } from 'next';
+import { Providers } from './providers';
 
 export const metadata: Metadata = {
   title: 'Tempo Testbed',
   description: 'Analysis algorithm development and testing for Tempo Insights',
 };
-
-const theme = createTheme({
-  primaryColor: 'yellow',
-  colors: {
-    // Map theme colors
-    dark: [
-      '#c5c0c9',  // text foreground
-      '#c0d6ea',
-      '#99aabb',
-      '#778899',
-      '#556677',
-      '#334455',
-      '#11425d',  // secondary bg
-      '#002233',  // primary bg
-      '#001a29',
-      '#001120',
-    ],
-  },
-  fontFamily: undefined,  // use Mantine defaults per-platform
-});
 
 export default function RootLayout({
   children,
@@ -36,15 +18,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" data-mantine-color-scheme="dark">
+    <html lang="en" data-mantine-color-scheme="dark" className={GeistSans.variable}>
       <head>
         <ColorSchemeScript defaultColorScheme="dark" />
       </head>
       <body>
-        <MantineProvider theme={theme} defaultColorScheme="dark">
-          <Notifications />
+        <Providers>
           {children}
-        </MantineProvider>
+        </Providers>
       </body>
     </html>
   );

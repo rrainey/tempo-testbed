@@ -19,6 +19,7 @@
     "@tempo/core": "file:../tempo-core",
     "@types/geodesy": "^2.2.8",
     "egm96-universal": "^1.1.1",
+    "geist": "^1.7.0",
     "geodesy": "^2.4.0",
     "gopro-telemetry": "^1.2.11",
     "gpmf-extract": "^0.3.3",

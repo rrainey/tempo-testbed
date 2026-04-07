@@ -183,7 +183,7 @@ export default function FormationPlaybackPage() {
                 Analysis
               </Anchor>
             </Group>
-            <Title order={2} style={{ color: '#ddff55' }}>
+            <Title order={2} style={{ color: 'var(--mantine-primary-color-filled)' }}>
               {testCaseName}
             </Title>
             <Text c="dimmed" size="sm">

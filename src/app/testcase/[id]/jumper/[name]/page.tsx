@@ -125,7 +125,7 @@ export default function JumperDetailPage() {
         {/* Header */}
         <Group justify="space-between">
           <div>
-            <Title order={2} style={{ color: '#ddff55' }}>{jumperName}</Title>
+            <Title order={2} style={{ color: 'var(--mantine-primary-color-filled)' }}>{jumperName}</Title>
             <Text c="dimmed" size="sm">{testCase.metadata.name}</Text>
           </div>
           <Group>

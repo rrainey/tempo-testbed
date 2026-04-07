@@ -50,7 +50,7 @@ export default function DashboardPage() {
     <Container size="lg" py="xl">
       <Stack gap="lg">
         <div>
-          <Title order={1} mb="xs" style={{ color: '#ddff55' }}>
+          <Title order={1} mb="xs" style={{ color: 'var(--mantine-primary-color-filled)' }}>
             Tempo Testbed
           </Title>
           <Text c="dimmed" size="lg">
@@ -87,7 +87,7 @@ export default function DashboardPage() {
               <Group justify="space-between" mb="md">
                 <Group gap="xs">
                   {tc.metadata.isSolo
-                    ? <IconParachute size={20} style={{ color: '#ddff55' }} />
+                    ? <IconParachute size={20} style={{ color: 'var(--mantine-primary-color-filled)' }} />
                     : <IconUsers size={20} style={{ color: '#855bf0' }} />
                   }
                   <Text fw={600}>{tc.metadata.name}</Text>

@@ -156,7 +156,7 @@ export default function DiffDashboardPage() {
                 <Group gap={4}><IconArrowLeft size={14} /> Dashboard</Group>
               </Anchor>
             </Group>
-            <Title order={2} style={{ color: '#ddff55' }}>Analysis Diff Dashboard</Title>
+            <Title order={2} style={{ color: 'var(--mantine-primary-color-filled)' }}>Analysis Diff Dashboard</Title>
             <Text c="dimmed" size="sm">
               Compare current analysis results against saved baselines
             </Text>
