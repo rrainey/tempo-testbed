@@ -6,7 +6,7 @@ import { useParams } from 'next/navigation';
 import {
   Container, Title, Text, Card, Group, Badge, Stack, Button,
   Loader, Center, Alert, Divider, Table, Paper, Tabs, Anchor,
-  SimpleGrid, Skeleton
+  SimpleGrid, Skeleton, Select
 } from '@mantine/core';
 import {
   IconAlertCircle, IconPlayerPlay, IconCheck, IconX,
@@ -17,7 +17,8 @@ import Link from 'next/link';
 import { JumpAltitudeChart } from '@tempo/core/components/analysis/JumpAltitudeChart';
 import { AccelerationChart } from '@tempo/core/components/analysis/AccelerationChart';
 import { AltitudeComparisonChart } from '@tempo/core/components/analysis/AltitudeComparisonChart';
-import { VelocityBinChart } from '@tempo/core/components/analysis/VelocityBinChart';
+import { VelocityBinChart, type DisplayMode } from '@tempo/core/components/analysis/VelocityBinChart';
+import { FallRateChart } from '@tempo/core/components/analysis/FallRateChart';
 import { notifications } from '@mantine/notifications';
 
 interface TestCaseData {
@@ -43,6 +44,7 @@ interface AnalysisResult {
   events: any;
   velocityBins: any[] | null;
   velocitySummary: any | null;
+  fallRateSeries: { time: number; raw_mph: number | null; calibrated_mph: number | null }[] | null;
   baseline: any;
   diff: any | null;
   accepted: boolean;
@@ -277,6 +279,8 @@ interface JumperPanelProps {
 function JumperPanel({
   jumperName, hasFlightData, baseline, result, isAnalyzing, onAnalyze, onAccept
 }: JumperPanelProps) {
+  const [fallRateMode, setFallRateMode] = useState<DisplayMode>('raw');
+
   if (!hasFlightData) {
     return (
       <Alert color="yellow" icon={<IconAlertCircle size={16} />}>
@@ -414,11 +418,49 @@ function JumperPanel({
             />
           )}
 
+          {/* Fall rate display mode — controls both fall rate charts below */}
+          {result.velocityBins && result.velocitySummary && (
+            <Card withBorder p="sm">
+              <Group justify="space-between" align="center">
+                <div>
+                  <Text fw={500} size="sm">Fall Rate Display Mode</Text>
+                  <Text size="xs" c="dimmed">
+                    Applies to both the fall rate vs. time and distribution charts
+                  </Text>
+                </div>
+                <Select
+                  value={fallRateMode}
+                  onChange={(value) => value && setFallRateMode(value as DisplayMode)}
+                  data={[
+                    { value: 'raw', label: 'Raw Fall Rate' },
+                    { value: 'calibrated', label: 'Calibrated Fall Rate' },
+                    { value: 'both', label: 'Both (Comparison)' },
+                  ]}
+                  allowDeselect={false}
+                  w={240}
+                />
+              </Group>
+            </Card>
+          )}
+
+          {/* Fall Rate vs Time Chart */}
+          {result.fallRateSeries && result.fallRateSeries.length > 0 && result.velocitySummary && (
+            <FallRateChart
+              data={result.fallRateSeries}
+              displayMode={fallRateMode}
+              exitOffsetSec={result.events.exitOffsetSec ?? undefined}
+              deploymentOffsetSec={result.events.deploymentOffsetSec ?? undefined}
+              landingOffsetSec={result.events.landingOffsetSec ?? undefined}
+              analysisWindow={result.velocitySummary.analysisWindow}
+            />
+          )}
+
           {/* Velocity Bin Chart */}
           {result.velocityBins && result.velocitySummary && (
             <VelocityBinChart
               data={result.velocityBins}
               summary={result.velocitySummary}
+              displayMode={fallRateMode}
             />
           )}
 

@@ -49,6 +49,7 @@ export async function POST(request: NextRequest) {
       events: result.events,
       velocityBins: result.velocityBins,
       velocitySummary: result.velocitySummary,
+      fallRateSeries: result.fallRateSeries,
       baseline: result.baseline,
       diff,
       accepted: !!accept,

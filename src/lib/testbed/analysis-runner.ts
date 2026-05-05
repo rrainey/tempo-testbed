@@ -12,6 +12,12 @@ export interface VelocityBinEntry {
   calibrated_elapsed_sec: number;
 }
 
+export interface FallRateSeriesPoint {
+  time: number; // seconds from log start
+  raw_mph: number | null;
+  calibrated_mph: number | null;
+}
+
 export interface VelocityBinSummary {
   raw: {
     totalAnalysisTime: number;
@@ -37,6 +43,7 @@ export interface AnalysisResult {
   events: JumpEvents;
   velocityBins: VelocityBinEntry[] | null;
   velocitySummary: VelocityBinSummary | null;
+  fallRateSeries: FallRateSeriesPoint[] | null;
   baseline: JumperBaseline;
 }
 
@@ -53,17 +60,19 @@ export function runAnalysis(rawLog: Buffer): AnalysisResult {
   // Step 3: Compute velocity bins (if exit and deployment were detected)
   let velocityBins: VelocityBinEntry[] | null = null;
   let velocitySummary: VelocityBinSummary | null = null;
+  let fallRateSeries: FallRateSeriesPoint[] | null = null;
 
   if (events.exitOffsetSec != null && events.deploymentOffsetSec != null) {
     const binResult = computeVelocityBins(parsedData, events);
     velocityBins = binResult.bins;
     velocitySummary = binResult.summary;
+    fallRateSeries = binResult.series;
   }
 
   // Step 4: Build baseline structure
   const baseline = buildBaseline(parsedData, events, velocityBins, velocitySummary);
 
-  return { parsedData, events, velocityBins, velocitySummary, baseline };
+  return { parsedData, events, velocityBins, velocitySummary, fallRateSeries, baseline };
 }
 
 /**
@@ -73,7 +82,7 @@ export function runAnalysis(rawLog: Buffer): AnalysisResult {
 function computeVelocityBins(
   data: ParsedLogData,
   events: JumpEvents
-): { bins: VelocityBinEntry[]; summary: VelocityBinSummary } {
+): { bins: VelocityBinEntry[]; summary: VelocityBinSummary; series: FallRateSeriesPoint[] } {
   const BIN_WIDTH_MPH = 5;
   const WINDOW_START_DELAY = 12; // seconds after exit
   const WINDOW_END_MARGIN = 2;   // seconds before deployment
@@ -91,6 +100,7 @@ function computeVelocityBins(
         calibrated: { totalAnalysisTime: 0, averageFallRate: 0, minFallRate: null, maxFallRate: null },
         analysisWindow: { startOffset: windowStart, endOffset: windowEnd, duration: 0 },
       },
+      series: [],
     };
   }
 
@@ -107,6 +117,7 @@ function computeVelocityBins(
         calibrated: { totalAnalysisTime: 0, averageFallRate: 0, minFallRate: null, maxFallRate: null },
         analysisWindow: { startOffset: windowStart, endOffset: windowEnd, duration: 0 },
       },
+      series: [],
     };
   }
 
@@ -156,6 +167,74 @@ function computeVelocityBins(
     if (calMax === null || calRate_mph > calMax) calMax = calRate_mph;
   }
 
+  // Build the fall rate time series across the full log so its X-axis
+  // aligns categorically with the other time-series charts (which use
+  // entry.timeOffset as the implicit category at non-uniform sample rate).
+  // Values are populated only for timestamps inside the analysis window.
+  //
+  // The reader's rateOfDescent_fpm is computed from consecutive GNSS
+  // samples; with ~10 Hz GPS at 0.1 m altitude resolution that quantizes
+  // the rate to ~2.24 mph steps. Recompute here over a centered ±0.5 s
+  // altitude window so the quantization shrinks to ~0.22 mph — invisible
+  // on the chart — without touching the value used elsewhere.
+  const RATE_WINDOW_HALF_SEC = 0.5;
+  type AltSample = { t: number; alt_m: number };
+  const gnss: AltSample[] = [];
+  for (const e of data.logEntries) {
+    if (e.location !== null && !isNaN(e.location.alt_m)) {
+      gnss.push({ t: e.timeOffset, alt_m: e.location.alt_m });
+    }
+  }
+  const lowerBound = (target: number): number => {
+    let lo = 0;
+    let hi = gnss.length;
+    while (lo < hi) {
+      const mid = (lo + hi) >> 1;
+      if (gnss[mid].t < target) lo = mid + 1;
+      else hi = mid;
+    }
+    return lo;
+  };
+  const smoothedRate_mps = (t: number): number | null => {
+    if (gnss.length < 2) return null;
+    const tA = t - RATE_WINDOW_HALF_SEC;
+    const tB = t + RATE_WINDOW_HALF_SEC;
+    // First sample at or after tA, and at or after tB.
+    const iA = lowerBound(tA);
+    const iB = lowerBound(tB);
+    const a = iA < gnss.length ? gnss[iA] : null;
+    const b = iB < gnss.length ? gnss[iB] : null;
+    if (!a || !b || b.t <= a.t) return null;
+    return -(b.alt_m - a.alt_m) / (b.t - a.t);
+  };
+
+  const series: FallRateSeriesPoint[] = [];
+  for (const entry of data.logEntries) {
+    if (entry.rateOfDescent_fpm === null) continue;
+    const inWindow =
+      entry.timeOffset >= windowStart &&
+      entry.timeOffset <= windowEnd &&
+      entry.rateOfDescent_fpm >= 0;
+    if (inWindow) {
+      const windowRate_mps = smoothedRate_mps(entry.timeOffset);
+      const rate_mps = windowRate_mps ?? entry.rateOfDescent_fpm * 0.00508;
+      const rawRate_mph = rate_mps * 2.23694;
+      const altitude_ft = entry.baroAlt_ft ?? 7000;
+      const calRate_mph = calibrateFallRate(rate_mps, altitude_ft);
+      series.push({
+        time: entry.timeOffset,
+        raw_mph: rawRate_mph,
+        calibrated_mph: calRate_mph,
+      });
+    } else {
+      series.push({
+        time: entry.timeOffset,
+        raw_mph: null,
+        calibrated_mph: null,
+      });
+    }
+  }
+
   // Merge bin keys and build output
   const allBinKeys = new Set([...rawBins.keys(), ...calBins.keys()]);
   const sortedKeys = Array.from(allBinKeys).sort((a, b) => a - b);
@@ -186,7 +265,7 @@ function computeVelocityBins(
     },
   };
 
-  return { bins, summary };
+  return { bins, summary, series };
 }
 
 /**
