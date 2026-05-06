@@ -4,6 +4,7 @@ import '@mantine/notifications/styles.css';
 import './mantinehub/style.css';
 import { ColorSchemeScript } from '@mantine/core';
 import { GeistSans } from 'geist/font/sans';
+import { GeistMono } from 'geist/font/mono';
 import type { Metadata } from 'next';
 import { Providers } from './providers';
 
@@ -18,7 +19,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" data-mantine-color-scheme="dark" className={GeistSans.variable}>
+    <html lang="en" data-mantine-color-scheme="dark" className={`${GeistSans.variable} ${GeistMono.variable}`}>
       <head>
         <ColorSchemeScript defaultColorScheme="dark" />
       </head>
