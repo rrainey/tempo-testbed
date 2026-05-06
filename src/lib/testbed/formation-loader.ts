@@ -9,6 +9,7 @@ import type { KMLDataV1 } from '@tempo/core/analysis/dropkick-reader';
 import { EventDetector } from '@tempo/core/analysis/event-detector';
 import type { JumpEvents } from '@tempo/core/analysis/event-detector';
 import { calibrateFallRate } from '@tempo/core/formation/coordinates';
+import { computeFallRateSeries } from '@tempo/core/analysis/fall-rate-series';
 import type { TimeSeriesPoint, ParticipantData } from '@tempo/core/formation/coordinates';
 import {
   estimateOrientation,
@@ -274,6 +275,8 @@ export function buildFormationData(
     const timeSeries = kmlToTimeSeries(parsedData.logEntries);
     if (timeSeries.length === 0) continue;
 
+    const fallRate = computeFallRateSeries(parsedData, events);
+
     participants.push({
       userId: jumperName,
       jumpLogId: `${testCaseId}/${jumperName}`,
@@ -282,6 +285,8 @@ export function buildFormationData(
       isBase: jumperName === metadata.baseJumper,
       isVisible: true,
       timeSeries,
+      fallRateSeries: fallRate?.series,
+      fallRateAnalysisWindow: fallRate?.analysisWindow,
     });
   }
 
