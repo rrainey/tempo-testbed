@@ -23,6 +23,7 @@
     "geodesy": "^2.4.0",
     "gopro-telemetry": "^1.2.11",
     "gpmf-extract": "^0.3.3",
+    "maplibre-gl": "^4.7.1",
     "next": "^15.5.9",
     "nmea-simple": "^3.3.0",
     "react": "19.1.0",

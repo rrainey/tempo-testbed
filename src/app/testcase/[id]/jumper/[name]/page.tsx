@@ -16,6 +16,7 @@ import { JumpAltitudeChart } from '@tempo/core/components/analysis/JumpAltitudeC
 import { AltitudeComparisonChart } from '@tempo/core/components/analysis/AltitudeComparisonChart';
 import { VelocityBinChart, type DisplayMode } from '@tempo/core/components/analysis/VelocityBinChart';
 import { FallRateChart } from '@tempo/core/components/analysis/FallRateChart';
+import { GNSSPathMap } from '@tempo/core/components/analysis/GNSSPathMap';
 import { notifications } from '@mantine/notifications';
 
 interface AnalysisResult {
@@ -243,6 +244,16 @@ export default function JumperDetailPage() {
                 gpsAltitudeData={result.timeSeries.gpsAltitude ?? []}
                 staticPressureData={result.timeSeries.staticPressure ?? []}
                 dzSurfacePressureAltitude_m={result.timeSeries.dzSurfacePressureAltitude_m ?? 0}
+              />
+            )}
+
+            {/* GNSS Flight Path Map */}
+            {result.timeSeries.hasGPS && result.timeSeries.gps.length > 0 && (
+              <GNSSPathMap
+                gpsData={result.timeSeries.gps}
+                exitOffsetSec={result.events.exitOffsetSec ?? undefined}
+                deploymentOffsetSec={result.events.deploymentOffsetSec ?? undefined}
+                landingOffsetSec={result.events.landingOffsetSec ?? undefined}
               />
             )}
 

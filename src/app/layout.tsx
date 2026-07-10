@@ -1,6 +1,7 @@
 // app/layout.tsx
 import '@mantine/core/styles.css';
 import '@mantine/notifications/styles.css';
+import 'maplibre-gl/dist/maplibre-gl.css';
 import './mantinehub/style.css';
 import { ColorSchemeScript } from '@mantine/core';
 import { GeistSans } from 'geist/font/sans';
