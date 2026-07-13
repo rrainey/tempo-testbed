@@ -6,7 +6,7 @@
 // diverge between navigation paths again.
 'use client';
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   Card, Group, Badge, Stack, Button, Loader, Center, Alert,
   SimpleGrid, Text, Table, Select,
@@ -21,6 +21,10 @@ import { AltitudeComparisonChart } from '@tempo/core/components/analysis/Altitud
 import { VelocityBinChart, type DisplayMode } from '@tempo/core/components/analysis/VelocityBinChart';
 import { FallRateChart } from '@tempo/core/components/analysis/FallRateChart';
 import { GNSSPathMap } from '@tempo/core/components/analysis/GNSSPathMap';
+import {
+  jumpTimeOrigin, shiftTimeSeries, shiftGPSPoints, shiftEvents,
+  shiftAnalysisWindow, shiftTimeField, timeAxisLabel,
+} from '@tempo/core/analysis/jump-time';
 import { useTestCase, type DiffStatus } from '@/lib/testbed/testcase-context';
 
 export function StatusBadge({ status }: { status: DiffStatus }) {
@@ -44,6 +48,37 @@ export function JumperAnalysis({ jumperName }: { jumperName: string }) {
   const result = analysisResults[jumperName] || null;
   const isAnalyzing = analyzing[jumperName] || false;
   const baseline = jumper?.baseline;
+
+  // Jump-elapsed display time base: exit = 0 s, climb negative. The canonical
+  // result stays in log time; this is a consistently shifted VIEW of it
+  // (series + event markers + analysis window together — never durations).
+  // When no exit was detected, origin is null and everything below is the
+  // unshifted log-time data.
+  const jt = useMemo(() => {
+    if (!result) return null;
+    const origin = jumpTimeOrigin(result.events);
+    const ts = result.timeSeries;
+    return {
+      origin,
+      axisLabel: timeAxisLabel(origin),
+      events: shiftEvents(result.events, origin),
+      altitude: shiftTimeSeries(ts.altitude, origin),
+      vspeed: shiftTimeSeries(ts.vspeed, origin),
+      gpsAltitude: shiftTimeSeries(ts.gpsAltitude ?? [], origin),
+      staticPressure: shiftTimeSeries(ts.staticPressure ?? [], origin),
+      acceleration: shiftTimeSeries(ts.acceleration, origin),
+      gps: shiftGPSPoints(ts.gps, origin),
+      fallRateSeries: result.fallRateSeries
+        ? shiftTimeField(result.fallRateSeries, origin)
+        : null,
+      velocitySummary: result.velocitySummary
+        ? {
+            ...result.velocitySummary,
+            analysisWindow: shiftAnalysisWindow(result.velocitySummary.analysisWindow, origin),
+          }
+        : null,
+    };
+  }, [result]);
 
   if (!jumper) {
     return (
@@ -93,36 +128,40 @@ export function JumperAnalysis({ jumperName }: { jumperName: string }) {
         </Card>
       )}
 
-      {result && (
+      {result && jt && (
         <>
-          {/* Event Summary */}
+          {/* Event Summary — times in jump-elapsed base (exit = 0 s) when an
+              exit was inferred; the Exit card's subtitle bridges to log time. */}
           <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="md">
             <MetricCard
               label="Exit"
-              value={result.events.exitOffsetSec != null
-                ? `${result.events.exitOffsetSec.toFixed(1)}s`
+              value={jt.events.exitOffsetSec != null
+                ? `${jt.events.exitOffsetSec.toFixed(1)}s`
                 : 'Not detected'}
-              subtitle={result.events.exitAltitudeFt
-                ? `${result.events.exitAltitudeFt.toLocaleString()} ft`
-                : undefined}
-              detected={result.events.exitOffsetSec != null}
+              subtitle={jt.origin !== null
+                ? `log ${result.events.exitOffsetSec.toFixed(1)}s`
+                  + (result.events.exitAltitudeFt
+                    ? ` · ${result.events.exitAltitudeFt.toLocaleString()} ft` : '')
+                : (result.events.exitAltitudeFt
+                    ? `${result.events.exitAltitudeFt.toLocaleString()} ft` : undefined)}
+              detected={jt.events.exitOffsetSec != null}
             />
             <MetricCard
               label="Deployment"
-              value={result.events.deploymentOffsetSec != null
-                ? `${result.events.deploymentOffsetSec.toFixed(1)}s`
+              value={jt.events.deploymentOffsetSec != null
+                ? `${jt.events.deploymentOffsetSec.toFixed(1)}s`
                 : 'Not detected'}
               subtitle={result.events.deployAltitudeFt
                 ? `${result.events.deployAltitudeFt.toLocaleString()} ft`
                 : undefined}
-              detected={result.events.deploymentOffsetSec != null}
+              detected={jt.events.deploymentOffsetSec != null}
             />
             <MetricCard
               label="Landing"
-              value={result.events.landingOffsetSec != null
-                ? `${result.events.landingOffsetSec.toFixed(1)}s`
+              value={jt.events.landingOffsetSec != null
+                ? `${jt.events.landingOffsetSec.toFixed(1)}s`
                 : 'Not detected'}
-              detected={result.events.landingOffsetSec != null}
+              detected={jt.events.landingOffsetSec != null}
             />
             <MetricCard
               label="Max Descent"
@@ -159,44 +198,47 @@ export function JumperAnalysis({ jumperName }: { jumperName: string }) {
           </Card>
 
           {/* Altitude Chart */}
-          {result.timeSeries.altitude.length > 0 && (
+          {jt.altitude.length > 0 && (
             <JumpAltitudeChart
-              altitudeData={result.timeSeries.altitude}
-              vspeedData={result.timeSeries.vspeed}
-              exitOffsetSec={result.events.exitOffsetSec ?? undefined}
-              deploymentOffsetSec={result.events.deploymentOffsetSec ?? undefined}
-              landingOffsetSec={result.events.landingOffsetSec ?? undefined}
+              altitudeData={jt.altitude}
+              vspeedData={jt.vspeed}
+              exitOffsetSec={jt.events.exitOffsetSec ?? undefined}
+              deploymentOffsetSec={jt.events.deploymentOffsetSec ?? undefined}
+              landingOffsetSec={jt.events.landingOffsetSec ?? undefined}
               showVSpeed={false}
+              timeAxisLabel={jt.axisLabel}
             />
           )}
 
           {/* IMU Acceleration Chart */}
-          {result.timeSeries.acceleration.length > 0 && (
+          {jt.acceleration.length > 0 && (
             <AccelerationChart
-              accelerationData={result.timeSeries.acceleration}
-              exitOffsetSec={result.events.exitOffsetSec ?? undefined}
-              deploymentOffsetSec={result.events.deploymentOffsetSec ?? undefined}
-              landingOffsetSec={result.events.landingOffsetSec ?? undefined}
+              accelerationData={jt.acceleration}
+              exitOffsetSec={jt.events.exitOffsetSec ?? undefined}
+              deploymentOffsetSec={jt.events.deploymentOffsetSec ?? undefined}
+              landingOffsetSec={jt.events.landingOffsetSec ?? undefined}
+              timeAxisLabel={jt.axisLabel}
             />
           )}
 
           {/* Altitude Source Comparison Chart */}
-          {result.timeSeries.altitude.length > 0 && (
+          {jt.altitude.length > 0 && (
             <AltitudeComparisonChart
-              baroAltitudeData={result.timeSeries.altitude}
-              gpsAltitudeData={result.timeSeries.gpsAltitude ?? []}
-              staticPressureData={result.timeSeries.staticPressure ?? []}
+              baroAltitudeData={jt.altitude}
+              gpsAltitudeData={jt.gpsAltitude}
+              staticPressureData={jt.staticPressure}
               dzSurfacePressureAltitude_m={result.timeSeries.dzSurfacePressureAltitude_m ?? 0}
+              timeAxisLabel={jt.axisLabel}
             />
           )}
 
           {/* GNSS Flight Path Map */}
-          {result.timeSeries.hasGPS && result.timeSeries.gps.length > 0 && (
+          {result.timeSeries.hasGPS && jt.gps.length > 0 && (
             <GNSSPathMap
-              gpsData={result.timeSeries.gps}
-              exitOffsetSec={result.events.exitOffsetSec ?? undefined}
-              deploymentOffsetSec={result.events.deploymentOffsetSec ?? undefined}
-              landingOffsetSec={result.events.landingOffsetSec ?? undefined}
+              gpsData={jt.gps}
+              exitOffsetSec={jt.events.exitOffsetSec ?? undefined}
+              deploymentOffsetSec={jt.events.deploymentOffsetSec ?? undefined}
+              landingOffsetSec={jt.events.landingOffsetSec ?? undefined}
             />
           )}
 
@@ -226,22 +268,24 @@ export function JumperAnalysis({ jumperName }: { jumperName: string }) {
           )}
 
           {/* Fall Rate vs Time Chart */}
-          {result.fallRateSeries && result.fallRateSeries.length > 0 && result.velocitySummary && (
+          {jt.fallRateSeries && jt.fallRateSeries.length > 0 && jt.velocitySummary && (
             <FallRateChart
-              data={result.fallRateSeries}
+              data={jt.fallRateSeries}
               displayMode={fallRateMode}
-              exitOffsetSec={result.events.exitOffsetSec ?? undefined}
-              deploymentOffsetSec={result.events.deploymentOffsetSec ?? undefined}
-              landingOffsetSec={result.events.landingOffsetSec ?? undefined}
-              analysisWindow={result.velocitySummary.analysisWindow}
+              exitOffsetSec={jt.events.exitOffsetSec ?? undefined}
+              deploymentOffsetSec={jt.events.deploymentOffsetSec ?? undefined}
+              landingOffsetSec={jt.events.landingOffsetSec ?? undefined}
+              analysisWindow={jt.velocitySummary.analysisWindow}
+              timeAxisLabel={jt.axisLabel}
             />
           )}
 
-          {/* Velocity Bin Chart */}
-          {result.velocityBins && result.velocitySummary && (
+          {/* Velocity Bin Chart (x axis is dwell time — durations, unshifted;
+              only the analysis-window badge reflects the jump time base) */}
+          {result.velocityBins && jt.velocitySummary && (
             <VelocityBinChart
               data={result.velocityBins}
-              summary={result.velocitySummary}
+              summary={jt.velocitySummary}
               displayMode={fallRateMode}
             />
           )}
