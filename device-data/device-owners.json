@@ -1,0 +1,13 @@
+[
+  {"deviceName": "Tempo-BT-0001", "jumperName": "riley", "isLoadOrganizer": false},
+  {"deviceName": "Tempo-BT-0002", "jumperName": "riley", "isLoadOrganizer": false},
+  {"deviceName": "Tempo-BT-0003", "jumperName": "bb", "isLoadOrganizer": true},
+  {"deviceName": "Tempo-BT-0004", "jumperName": "riley", "isLoadOrganizer": false},
+  {"deviceName": "Tempo-BT-0005", "jumperName": "riley", "isLoadOrganizer": false},
+  {"deviceName": "Tempo-BT-0006", "jumperName": "riley", "isLoadOrganizer": false},
+  {"deviceName": "Tempo-BT-0007", "jumperName": "scott_z", "isLoadOrganizer": true},
+  {"deviceName": "Tempo-BT-0008", "jumperName": "riley", "isLoadOrganizer": false},
+  {"deviceName": "Tempo-BT-0009", "jumperName": "riley", "isLoadOrganizer": false},
+  {"deviceName": "Tempo-BT-0010", "jumperName": "riley", "isLoadOrganizer": false}
+
+]

@@ -117,7 +117,7 @@ export default function DashboardPage() {
                     onClick={(e: React.MouseEvent) => {
                       e.preventDefault();
                       e.stopPropagation();
-                      router.push(`/formation/${tc.id}`);
+                      router.push(`/testcase/${tc.id}/formation`);
                     }}
                     style={{ cursor: 'pointer' }}
                   >
