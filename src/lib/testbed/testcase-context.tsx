@@ -15,7 +15,10 @@ export interface TestCaseData {
   metadata: {
     name: string;
     description: string;
-    dropzone: { name: string; lat_deg: number; lon_deg: number; elevation_m: number };
+    dropzone: {
+      name: string; lat_deg: number; lon_deg: number; elevation_m: number;
+      timezone?: string; // IANA zone, written by the promote tool
+    };
     jumpers: string[];
     baseJumper: string;
     isSolo: boolean;

@@ -27,6 +27,7 @@ import {
   shiftAnalysisWindow, shiftTimeField, timeAxisLabel,
 } from '@tempo/core/analysis/jump-time';
 import { useTestCase, type DiffStatus } from '@/lib/testbed/testcase-context';
+import { LogbookSummary } from '@/components/testbed/LogbookSummary';
 
 export function StatusBadge({ status }: { status: DiffStatus }) {
   const config: Record<DiffStatus, { color: string; icon: React.ReactNode }> = {
@@ -150,6 +151,9 @@ export function JumperAnalysis({ jumperName }: { jumperName: string }) {
 
       {result && jt && (
         <>
+          {/* The jump as a logbook entry */}
+          <LogbookSummary events={result.events} dropzone={testCase?.metadata.dropzone} />
+
           {/* Event Summary — times in jump-elapsed base (exit = 0 s) when an
               exit was inferred; the Exit card's subtitle bridges to log time. */}
           <SimpleGrid cols={{ base: 2, sm: 4 }} spacing="md">
