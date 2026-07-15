@@ -6,7 +6,7 @@
 // diverge between navigation paths again.
 'use client';
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   Card, Group, Badge, Stack, Button, Loader, Center, Alert,
   SimpleGrid, Text, Table, Select,
@@ -21,6 +21,7 @@ import { AltitudeComparisonChart } from '@tempo/core/components/analysis/Altitud
 import { VelocityBinChart, type DisplayMode } from '@tempo/core/components/analysis/VelocityBinChart';
 import { FallRateChart } from '@tempo/core/components/analysis/FallRateChart';
 import { GNSSPathMap } from '@tempo/core/components/analysis/GNSSPathMap';
+import { JumpTimeScrubber, type TimeWindow } from '@tempo/core/components/analysis/JumpTimeScrubber';
 import {
   jumpTimeOrigin, shiftTimeSeries, shiftGPSPoints, shiftEvents,
   shiftAnalysisWindow, shiftTimeField, timeAxisLabel,
@@ -48,6 +49,11 @@ export function JumperAnalysis({ jumperName }: { jumperName: string }) {
   const result = analysisResults[jumperName] || null;
   const isAnalyzing = analyzing[jumperName] || false;
   const baseline = jumper?.baseline;
+
+  // Unified time window (jump-elapsed base), scoping the altitude, IMU, and
+  // altitude-comparison charts together. null = full log.
+  const [timeWindow, setTimeWindow] = useState<TimeWindow | null>(null);
+  useEffect(() => setTimeWindow(null), [result]); // fresh analysis → full view
 
   // Jump-elapsed display time base: exit = 0 s, climb negative. The canonical
   // result stays in log time; this is a consistently shifted VIEW of it
@@ -79,6 +85,20 @@ export function JumperAnalysis({ jumperName }: { jumperName: string }) {
         : null,
     };
   }, [result]);
+
+  // Series windowed to the scrubber selection (identity when full log).
+  const win = useMemo(() => {
+    if (!jt) return null;
+    const cut = <T extends { timestamp: number }>(pts: T[]): T[] =>
+      timeWindow ? pts.filter(p => p.timestamp >= timeWindow[0] && p.timestamp <= timeWindow[1]) : pts;
+    return {
+      altitude: cut(jt.altitude),
+      vspeed: cut(jt.vspeed),
+      acceleration: cut(jt.acceleration),
+      gpsAltitude: cut(jt.gpsAltitude),
+      staticPressure: cut(jt.staticPressure),
+    };
+  }, [jt, timeWindow]);
 
   if (!jumper) {
     return (
@@ -197,11 +217,23 @@ export function JumperAnalysis({ jumperName }: { jumperName: string }) {
             </Group>
           </Card>
 
-          {/* Altitude Chart */}
-          {jt.altitude.length > 0 && (
-            <JumpAltitudeChart
+          {/* Unified time scrubber — scopes the three charts below it */}
+          {jt.altitude.length > 1 && win && (
+            <JumpTimeScrubber
               altitudeData={jt.altitude}
-              vspeedData={jt.vspeed}
+              exitOffsetSec={jt.events.exitOffsetSec ?? undefined}
+              deploymentOffsetSec={jt.events.deploymentOffsetSec ?? undefined}
+              landingOffsetSec={jt.events.landingOffsetSec ?? undefined}
+              value={timeWindow}
+              onChange={setTimeWindow}
+            />
+          )}
+
+          {/* Altitude Chart */}
+          {win && win.altitude.length > 0 && (
+            <JumpAltitudeChart
+              altitudeData={win.altitude}
+              vspeedData={win.vspeed}
               exitOffsetSec={jt.events.exitOffsetSec ?? undefined}
               deploymentOffsetSec={jt.events.deploymentOffsetSec ?? undefined}
               landingOffsetSec={jt.events.landingOffsetSec ?? undefined}
@@ -211,9 +243,9 @@ export function JumperAnalysis({ jumperName }: { jumperName: string }) {
           )}
 
           {/* IMU Acceleration Chart */}
-          {jt.acceleration.length > 0 && (
+          {win && win.acceleration.length > 0 && (
             <AccelerationChart
-              accelerationData={jt.acceleration}
+              accelerationData={win.acceleration}
               exitOffsetSec={jt.events.exitOffsetSec ?? undefined}
               deploymentOffsetSec={jt.events.deploymentOffsetSec ?? undefined}
               landingOffsetSec={jt.events.landingOffsetSec ?? undefined}
@@ -222,11 +254,11 @@ export function JumperAnalysis({ jumperName }: { jumperName: string }) {
           )}
 
           {/* Altitude Source Comparison Chart */}
-          {jt.altitude.length > 0 && (
+          {win && win.altitude.length > 0 && (
             <AltitudeComparisonChart
-              baroAltitudeData={jt.altitude}
-              gpsAltitudeData={jt.gpsAltitude}
-              staticPressureData={jt.staticPressure}
+              baroAltitudeData={win.altitude}
+              gpsAltitudeData={win.gpsAltitude}
+              staticPressureData={win.staticPressure}
               dzSurfacePressureAltitude_m={result.timeSeries.dzSurfacePressureAltitude_m ?? 0}
               timeAxisLabel={jt.axisLabel}
             />
