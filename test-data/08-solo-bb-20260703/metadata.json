@@ -1,0 +1,21 @@
+{
+  "name": "Solo \u2014 bb \u2014 2026-07-03 16:28 UTC",
+  "description": "Auto-ingested by tempo-tb-ingest. Jumpers: bb. Exits: bb: 16:28:27.352Z (ACCEL). Session IDs: 955E1FF7 (bb).",
+  "dropzone": {
+    "name": "Spaceland Dallas",
+    "lat_deg": 33.4569,
+    "lon_deg": -96.377,
+    "elevation_m": 233.0,
+    "timezone": "America/Chicago"
+  },
+  "jumpers": [
+    "bb"
+  ],
+  "baseJumper": "bb",
+  "isSolo": true,
+  "tags": [
+    "20260703",
+    "auto-ingested",
+    "solo"
+  ]
+}
