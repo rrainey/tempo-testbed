@@ -26,6 +26,10 @@ import {
   jumpTimeOrigin, shiftTimeSeries, shiftGPSPoints, shiftEvents,
   shiftAnalysisWindow, shiftTimeField, timeAxisLabel,
 } from '@tempo/core/analysis/jump-time';
+import { findContainingPolygon } from '@tempo/core/analysis/gps-path-utils';
+import type { GeoJSONFeatureCollection } from '@tempo/core/analysis/geojson-overlay';
+import { buildFlareProfile } from '@tempo/core/analysis/landing-flare';
+import { LandingFlareChart } from '@tempo/core/components/analysis/LandingFlareChart';
 import { useTestCase, type DiffStatus } from '@/lib/testbed/testcase-context';
 import { LogbookSummary } from '@/components/testbed/LogbookSummary';
 
@@ -43,7 +47,7 @@ export function StatusBadge({ status }: { status: DiffStatus }) {
 }
 
 export function JumperAnalysis({ jumperName }: { jumperName: string }) {
-  const { testCase, analysisResults, analyzing, analyzeJumper } = useTestCase();
+  const { testCase, testCaseId, analysisResults, analyzing, analyzeJumper } = useTestCase();
   const [fallRateMode, setFallRateMode] = useState<DisplayMode>('raw');
 
   const jumper = testCase?.jumpers.find(j => j.name === jumperName);
@@ -55,6 +59,41 @@ export function JumperAnalysis({ jumperName }: { jumperName: string }) {
   // altitude-comparison charts together. null = full log.
   const [timeWindow, setTimeWindow] = useState<TimeWindow | null>(null);
   useEffect(() => setTimeWindow(null), [result]); // fresh analysis → full view
+
+  // Landing-area polygons for this case's drop zone (resolved by proximity).
+  const [landingAreas, setLandingAreas] = useState<GeoJSONFeatureCollection | null>(null);
+  useEffect(() => {
+    fetch(`/api/testcases/${testCaseId}/landing-areas`)
+      .then(r => r.json())
+      .then(d => setLandingAreas(d.landingAreas ?? null))
+      .catch(() => setLandingAreas(null));
+  }, [testCaseId]);
+
+  // The area the jumper touched down in (if any) — demarcated on the map as
+  // a single-feature overlay (blue shade per LANDING_AREA_STYLE).
+  const landingOverlays = useMemo<GeoJSONFeatureCollection[] | undefined>(() => {
+    if (!result || !landingAreas || result.events.landingOffsetSec == null) return undefined;
+    const gps = result.timeSeries.gps; // log-time base, matching landingOffsetSec
+    if (!gps.length) return undefined;
+    const landing = gps.reduce((best: any, p: any) =>
+      Math.abs(p.timestamp - result.events.landingOffsetSec) <
+      Math.abs(best.timestamp - result.events.landingOffsetSec) ? p : best);
+    const area = findContainingPolygon(landingAreas, landing.longitude, landing.latitude);
+    if (!area) return undefined;
+    return [{ type: 'FeatureCollection', features: [area as any] }];
+  }, [result, landingAreas]);
+
+  // Landing-flare side profile (log-time series; the plot's own axes are
+  // spatial, so the jump-time base doesn't apply here).
+  const flareProfile = useMemo(() => {
+    if (!result || result.events.landingOffsetSec == null || !result.timeSeries.hasGPS) return null;
+    return buildFlareProfile(
+      result.timeSeries.gps,
+      result.timeSeries.altitude,
+      result.timeSeries.acceleration,
+      result.events.landingOffsetSec
+    );
+  }, [result]);
 
   // Jump-elapsed display time base: exit = 0 s, climb negative. The canonical
   // result stays in log time; this is a consistently shifted VIEW of it
@@ -268,16 +307,6 @@ export function JumperAnalysis({ jumperName }: { jumperName: string }) {
             />
           )}
 
-          {/* GNSS Flight Path Map */}
-          {result.timeSeries.hasGPS && jt.gps.length > 0 && (
-            <GNSSPathMap
-              gpsData={jt.gps}
-              exitOffsetSec={jt.events.exitOffsetSec ?? undefined}
-              deploymentOffsetSec={jt.events.deploymentOffsetSec ?? undefined}
-              landingOffsetSec={jt.events.landingOffsetSec ?? undefined}
-            />
-          )}
-
           {/* Fall rate display mode — controls both fall rate charts below */}
           {result.velocityBins && result.velocitySummary && (
             <Card withBorder p="sm">
@@ -325,6 +354,20 @@ export function JumperAnalysis({ jumperName }: { jumperName: string }) {
               displayMode={fallRateMode}
             />
           )}
+
+          {/* GNSS Flight Path Map */}
+          {result.timeSeries.hasGPS && jt.gps.length > 0 && (
+            <GNSSPathMap
+              gpsData={jt.gps}
+              exitOffsetSec={jt.events.exitOffsetSec ?? undefined}
+              deploymentOffsetSec={jt.events.deploymentOffsetSec ?? undefined}
+              landingOffsetSec={jt.events.landingOffsetSec ?? undefined}
+              overlays={landingOverlays}
+            />
+          )}
+
+          {/* Landing Flare Profile */}
+          {flareProfile && <LandingFlareChart profile={flareProfile} />}
 
           {/* Diff Table */}
           {result.diff && <DiffTable diff={result.diff} />}

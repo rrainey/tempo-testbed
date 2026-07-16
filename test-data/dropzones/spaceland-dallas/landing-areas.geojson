@@ -1,0 +1,318 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "A / B Landing area",
+        "class": "student",
+        "license": [
+          "student",
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "kind": "area"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -96.377064,
+              33.450185
+            ],
+            [
+              -96.375284,
+              33.450219
+            ],
+            [
+              -96.375173,
+              33.452412
+            ],
+            [
+              -96.376307,
+              33.45246
+            ],
+            [
+              -96.376121,
+              33.456376
+            ],
+            [
+              -96.376791,
+              33.456443
+            ],
+            [
+              -96.377064,
+              33.450185
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Darwin landing area",
+        "class": "alternate",
+        "license": [
+          "D"
+        ],
+        "kind": "area"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -96.379545,
+              33.448532
+            ],
+            [
+              -96.377987,
+              33.448434
+            ],
+            [
+              -96.378565,
+              33.446925
+            ],
+            [
+              -96.379457,
+              33.44708
+            ],
+            [
+              -96.3796,
+              33.447306
+            ],
+            [
+              -96.379545,
+              33.448532
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "D license landing area",
+        "class": "main",
+        "license": [
+          "D"
+        ],
+        "kind": "area"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -96.377681,
+              33.451116
+            ],
+            [
+              -96.378837,
+              33.451169
+            ],
+            [
+              -96.379559,
+              33.449798
+            ],
+            [
+              -96.379619,
+              33.449595
+            ],
+            [
+              -96.379642,
+              33.449377
+            ],
+            [
+              -96.379541,
+              33.449163
+            ],
+            [
+              -96.379352,
+              33.449023
+            ],
+            [
+              -96.378822,
+              33.449036
+            ],
+            [
+              -96.378815,
+              33.449548
+            ],
+            [
+              -96.378109,
+              33.449561
+            ],
+            [
+              -96.377702,
+              33.449951
+            ],
+            [
+              -96.377682,
+              33.451117
+            ],
+            [
+              -96.377681,
+              33.451116
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "High performance landing area",
+        "class": "swoop",
+        "license": [
+          "D"
+        ],
+        "kind": "area"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -96.377131,
+              33.449048
+            ],
+            [
+              -96.37643,
+              33.44909
+            ],
+            [
+              -96.376472,
+              33.447964
+            ],
+            [
+              -96.376678,
+              33.447034
+            ],
+            [
+              -96.377189,
+              33.447042
+            ],
+            [
+              -96.377131,
+              33.449048
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "C license landing area",
+        "class": "main",
+        "license": [
+          "C",
+          "D"
+        ],
+        "kind": "area"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              -96.377682,
+              33.451124
+            ],
+            [
+              -96.377497,
+              33.454859
+            ],
+            [
+              -96.378089,
+              33.454881
+            ],
+            [
+              -96.378211,
+              33.452529
+            ],
+            [
+              -96.378307,
+              33.452319
+            ],
+            [
+              -96.378837,
+              33.451179
+            ],
+            [
+              -96.377682,
+              33.451121
+            ],
+            [
+              -96.377682,
+              33.451124
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "A / B target",
+        "license": [
+          "A",
+          "B",
+          "C",
+          "D"
+        ],
+        "kind": "target",
+        "area": "A / B Landing area"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -96.376408,
+          33.45182
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "C license target",
+        "license": [
+          "C",
+          "D"
+        ],
+        "kind": "target",
+        "area": "C license landing area"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -96.378141,
+          33.451342
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "D license target",
+        "license": [
+          "D"
+        ],
+        "kind": "target",
+        "area": "D license landing area"
+      },
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          -96.378918,
+          33.450042
+        ]
+      }
+    }
+  ]
+}
