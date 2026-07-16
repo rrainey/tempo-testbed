@@ -91,7 +91,10 @@ export function JumperAnalysis({ jumperName }: { jumperName: string }) {
       result.timeSeries.gps,
       result.timeSeries.altitude,
       result.timeSeries.acceleration,
-      result.events.landingOffsetSec
+      result.events.landingOffsetSec,
+      // Torso stick figures between callouts, when the server produced a
+      // trusted calibration (fw >= 1.2.0, small tilt residual).
+      { attitude: result.torso?.attitude }
     );
   }, [result]);
 

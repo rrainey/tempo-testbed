@@ -40,6 +40,17 @@ export interface AnalysisResult {
   baseline: any;
   diff: any | null;
   accepted: boolean;
+  /** Landing-phase torso attitude (fw >= 1.2.0 with a trusted calibration only). */
+  torso: {
+    attitude: { t: number; roll_deg: number; pitch_deg: number; yaw_degT: number }[];
+    calibration: {
+      window: [number, number];
+      forwardSign: 1 | -1;
+      quatConvention: string;
+      yawOffset_deg: number;
+      tiltResidual_deg: number;
+    };
+  } | null;
   timeSeries: {
     altitude: { timestamp: number; value: number }[];
     vspeed: { timestamp: number; value: number }[];

@@ -8,6 +8,7 @@
     "start": "next start",
     "analyze": "tsx src/lib/testbed/cli-analyze.ts",
     "analyze:accept": "tsx src/lib/testbed/cli-analyze.ts --accept",
+    "torso-validate": "tsx tools/torso-orientation/validate.ts",
     "test": "jest",
     "test:watch": "jest --watch"
   },

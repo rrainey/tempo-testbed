@@ -53,6 +53,7 @@ export async function POST(request: NextRequest) {
       baseline: result.baseline,
       diff,
       accepted: !!accept,
+      torso: result.torso,
       timeSeries: {
         altitude: result.parsedData.altitude,
         vspeed: result.parsedData.vspeed,

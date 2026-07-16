@@ -3,6 +3,17 @@ import { LogParser } from '@tempo/core/analysis/log-parser';
 import { EventDetector } from '@tempo/core/analysis/event-detector';
 import { calibrateFallRate } from '@tempo/core/formation/coordinates';
 import { computeFallRateSeries } from '@tempo/core/analysis/fall-rate-series';
+import {
+  estimateTorsoCalibration,
+  torsoAttitudeSeries,
+} from '@tempo/core/analysis/torso-orientation';
+import type {
+  TorsoAttitude,
+  QuatConvention,
+  ImuSample,
+  TrackSample,
+  QuatSample,
+} from '@tempo/core/analysis/torso-orientation';
 import type { ParsedLogData } from '@tempo/core/analysis/log-parser';
 import type { JumpEvents } from '@tempo/core/analysis/event-detector';
 import type { FallRateSeriesPoint } from '@tempo/core/analysis/fall-rate-series';
@@ -36,6 +47,18 @@ export interface VelocityBinSummary {
   };
 }
 
+export interface TorsoResult {
+  /** Torso attitude (20 Hz) over the landing window [landing-40, landing+5]. */
+  attitude: TorsoAttitude[];
+  calibration: {
+    window: [number, number];
+    forwardSign: 1 | -1;
+    quatConvention: QuatConvention;
+    yawOffset_deg: number;
+    tiltResidual_deg: number;
+  };
+}
+
 export interface AnalysisResult {
   parsedData: ParsedLogData;
   events: JumpEvents;
@@ -43,6 +66,9 @@ export interface AnalysisResult {
   velocitySummary: VelocityBinSummary | null;
   fallRateSeries: FallRateSeriesPoint[] | null;
   baseline: JumperBaseline;
+  /** Torso orientation for the landing phase — null when the log is too old
+   *  (firmware < 1.2.0), events are missing, or calibration diagnostics fail. */
+  torso: TorsoResult | null;
 }
 
 /**
@@ -70,7 +96,60 @@ export function runAnalysis(rawLog: Buffer): AnalysisResult {
   // Step 4: Build baseline structure
   const baseline = buildBaseline(parsedData, events, velocityBins, velocitySummary);
 
-  return { parsedData, events, velocityBins, velocitySummary, fallRateSeries, baseline };
+  // Step 5: Torso orientation for the landing phase (firmware >= 1.2.0 only)
+  const torso = computeTorsoOrientation(parsedData, events);
+
+  return { parsedData, events, velocityBins, velocitySummary, fallRateSeries, baseline, torso };
+}
+
+/**
+ * Calibrate the pocket transform + AHRS yaw offset over a quiet canopy window
+ * and return the torso attitude series for the landing phase. Returns null
+ * whenever the result can't be trusted: log version < 112 (the calibrator
+ * refuses those), missing events, no qualifying calibration window, or a
+ * tilt residual too large to believe.
+ */
+function computeTorsoOrientation(parsedData: ParsedLogData, events: JumpEvents): TorsoResult | null {
+  const exit = events.exitOffsetSec;
+  const deploy = events.deploymentOffsetSec;
+  const landing = events.landingOffsetSec;
+  if (exit == null || deploy == null || landing == null) return null;
+
+  const imu: ImuSample[] = parsedData.imuPackets
+    .filter(p => p.timeOffset !== undefined)
+    .map(p => ({
+      t: p.timeOffset!,
+      ax: p.accX_mps2, ay: p.accY_mps2, az: p.accZ_mps2,
+      gx: p.rotX_rps, gy: p.rotY_rps, gz: p.rotZ_rps,
+    }));
+  const track: TrackSample[] = parsedData.gps
+    .filter(p => p.groundTrack_degT !== undefined && p.groundspeed_kmph !== undefined)
+    .map(p => ({ t: p.timestamp, track_degT: p.groundTrack_degT!, speed_mps: p.groundspeed_kmph! / 3.6 }));
+  const quat: QuatSample[] = parsedData.im2Packets
+    .filter(p => p.timeOffset !== undefined)
+    .map(p => ({ t: p.timeOffset!, w: p.q0, x: p.q1, y: p.q2, z: p.q3 }));
+
+  const cal = estimateTorsoCalibration(imu, track, quat, deploy + 20, landing - 8, {
+    logVersion: parsedData.logVersion,
+    freefall: [exit + 8, deploy - 5],
+  });
+  if (!cal) return null;
+  if (cal.tiltResidual_deg > 15) {
+    console.log(`[TORSO] calibration rejected: tilt residual ${cal.tiltResidual_deg.toFixed(1)}°`);
+    return null;
+  }
+
+  const landingQuat = quat.filter(q => q.t >= landing - 40 && q.t <= landing + 5);
+  return {
+    attitude: torsoAttitudeSeries(landingQuat, cal),
+    calibration: {
+      window: [cal.window.t0, cal.window.t1],
+      forwardSign: cal.forwardSign,
+      quatConvention: cal.quatConvention,
+      yawOffset_deg: cal.yawOffset_deg,
+      tiltResidual_deg: cal.tiltResidual_deg,
+    },
+  };
 }
 
 /**
