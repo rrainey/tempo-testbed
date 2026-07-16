@@ -9,7 +9,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   Card, Group, Badge, Stack, Button, Loader, Center, Alert,
-  SimpleGrid, Text, Table, Select,
+  SimpleGrid, Text, Table, Select, Tooltip,
 } from '@mantine/core';
 import {
   IconAlertCircle, IconPlayerPlay, IconCheck, IconX,
@@ -221,6 +221,7 @@ export function JumperAnalysis({ jumperName }: { jumperName: string }) {
                 ? `${result.events.deployAltitudeFt.toLocaleString()} ft`
                 : undefined}
               detected={jt.events.deploymentOffsetSec != null}
+              badges={<OpeningBadges opening={result.torso?.opening ?? null} />}
             />
             <MetricCard
               label="Landing"
@@ -419,12 +420,13 @@ export function JumperAnalysis({ jumperName }: { jumperName: string }) {
 }
 
 function MetricCard({
-  label, value, subtitle, detected,
+  label, value, subtitle, detected, badges,
 }: {
   label: string;
   value: string;
   subtitle?: string;
   detected: boolean;
+  badges?: React.ReactNode;
 }) {
   return (
     <Card withBorder p="md">
@@ -433,8 +435,52 @@ function MetricCard({
         {value}
       </Text>
       {subtitle && <Text size="xs" c="dimmed">{subtitle}</Text>}
+      {badges}
     </Card>
   );
+}
+
+/** Opening-anomaly badges for the Deployment tile (off-heading openings and
+ *  line twists, per docs/event-algorithms.md §6). */
+function OpeningBadges({ opening }: {
+  opening: NonNullable<import('@/lib/testbed/testcase-context').AnalysisResult['torso']>['opening'];
+}) {
+  if (!opening) return null;
+  const badges: React.ReactNode[] = [];
+  if (!opening.determinate) {
+    badges.push(
+      <Tooltip key="ind" label={opening.indeterminateReason ?? 'unstable before deployment'} withArrow>
+        <Badge size="xs" color="gray" variant="light">heading indeterminate</Badge>
+      </Tooltip>
+    );
+  } else if (opening.offHeading_deg != null) {
+    badges.push(
+      <Tooltip
+        key="hdg"
+        label={`freefall ${Math.round(opening.freefallHeading_degT!)}°T → canopy ${Math.round(opening.canopyHeading_degT!)}°T`}
+        withArrow
+      >
+        <Badge size="xs" color={opening.offHeadingOpening ? 'red' : 'teal'} variant="light">
+          {opening.offHeadingOpening ? 'off-heading' : 'on-heading'} {Math.round(opening.offHeading_deg)}°
+        </Badge>
+      </Tooltip>
+    );
+  }
+  if (opening.lineTwist !== 'none') {
+    badges.push(
+      <Tooltip
+        key="twist"
+        label={`${Math.round(opening.yawExcursion_deg)}° of yaw after deployment · peak load ${opening.peakLoad_g.toFixed(1)} g`}
+        withArrow
+      >
+        <Badge size="xs" color={opening.lineTwist === 'aggressive' ? 'red' : 'orange'} variant="light">
+          {opening.lineTwist === 'aggressive' ? 'aggressive line twist' : 'line twist'}
+        </Badge>
+      </Tooltip>
+    );
+  }
+  if (badges.length === 0) return null;
+  return <Group gap={4} mt={4}>{badges}</Group>;
 }
 
 function DiffTable({ diff }: { diff: any }) {

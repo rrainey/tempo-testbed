@@ -43,6 +43,17 @@ export interface AnalysisResult {
   /** Landing-phase torso attitude (fw >= 1.2.0 with a trusted calibration only). */
   torso: {
     attitude: { t: number; roll_deg: number; pitch_deg: number; yaw_degT: number }[];
+    opening: {
+      determinate: boolean;
+      indeterminateReason?: string;
+      freefallHeading_degT?: number;
+      canopyHeading_degT?: number;
+      offHeading_deg?: number;
+      offHeadingOpening?: boolean;
+      yawExcursion_deg: number;
+      peakLoad_g: number;
+      lineTwist: 'none' | 'benign' | 'aggressive';
+    } | null;
     calibration: {
       window: [number, number];
       forwardSign: 1 | -1;

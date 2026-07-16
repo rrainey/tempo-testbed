@@ -19,7 +19,7 @@
 import * as fs from 'fs';
 import {
   LogParser, EventDetector,
-  estimateTorsoCalibration, torsoAttitudeSeries,
+  estimateTorsoCalibration, torsoAttitudeSeries, analyzeOpening,
   ImuSample, TrackSample, QuatSample, TorsoAttitude,
 } from '@tempo/core';
 
@@ -73,6 +73,24 @@ if (cal.tiltResidual_deg > 15) {
 }
 
 const att = torsoAttitudeSeries(quat, cal);
+
+// Opening anomalies (off-heading / line twist) — docs/event-algorithms.md §6.
+const opening = analyzeOpening(att, track, imu, deploy, events.activationOffsetSec);
+console.log('\n--- opening analysis ---');
+if (!opening) {
+  console.log('no attitude coverage around deployment');
+} else {
+  if (opening.determinate) {
+    console.log(`freefall heading ${opening.freefallHeading_degT?.toFixed(0)}°T → canopy ${opening.canopyHeading_degT?.toFixed(0) ?? '—'}°T` +
+      `  off-heading ${opening.offHeading_deg?.toFixed(0) ?? '—'}°  flagged=${opening.offHeadingOpening ?? '—'}` +
+      (opening.offHeadingVsTrack_deg != null ? `  (vs ground track: ${opening.offHeadingVsTrack_deg.toFixed(0)}°)` : ''));
+  } else {
+    console.log(`off-heading INDETERMINATE: ${opening.indeterminateReason}`);
+  }
+  console.log(`yaw excursion ${opening.yawExcursion_deg.toFixed(0)}°` +
+    (opening.trackSpread_deg != null ? `  track spread ${opening.trackSpread_deg.toFixed(0)}°` : '') +
+    `  peak load ${opening.peakLoad_g.toFixed(2)} g  lineTwist=${opening.lineTwist}`);
+}
 const at = (t: number) => att.reduce((b, a) => (Math.abs(a.t - t) < Math.abs(b.t - t) ? a : b));
 const fmt = (a: TorsoAttitude) =>
   `t=${a.t.toFixed(1).padStart(7)}  roll=${a.roll_deg.toFixed(1).padStart(7)}  pitch=${a.pitch_deg.toFixed(1).padStart(7)}  yaw=${a.yaw_degT.toFixed(1).padStart(6)}°T`;

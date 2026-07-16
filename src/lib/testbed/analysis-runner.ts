@@ -7,6 +7,8 @@ import {
   estimateTorsoCalibration,
   torsoAttitudeSeries,
 } from '@tempo/core/analysis/torso-orientation';
+import { analyzeOpening } from '@tempo/core/analysis/opening-anomalies';
+import type { OpeningAnalysis } from '@tempo/core/analysis/opening-anomalies';
 import type {
   TorsoAttitude,
   QuatConvention,
@@ -50,6 +52,9 @@ export interface VelocityBinSummary {
 export interface TorsoResult {
   /** Torso attitude (20 Hz) over the landing window [landing-40, landing+5]. */
   attitude: TorsoAttitude[];
+  /** Off-heading / line-twist assessment of the opening (null when attitude
+   *  coverage around deployment was insufficient). */
+  opening: OpeningAnalysis | null;
   calibration: {
     window: [number, number];
     forwardSign: 1 | -1;
@@ -139,9 +144,18 @@ function computeTorsoOrientation(parsedData: ParsedLogData, events: JumpEvents):
     return null;
   }
 
-  const landingQuat = quat.filter(q => q.t >= landing - 40 && q.t <= landing + 5);
+  const fullAttitude = torsoAttitudeSeries(quat, cal);
+  const opening = analyzeOpening(
+    fullAttitude, track, imu, deploy, events.activationOffsetSec);
+  if (opening && (!opening.determinate || opening.offHeadingOpening || opening.lineTwist !== 'none')) {
+    console.log(`[TORSO] opening: determinate=${opening.determinate}` +
+      ` offHeading=${opening.offHeading_deg?.toFixed(0) ?? '—'}°` +
+      ` twist=${opening.lineTwist} (excursion ${opening.yawExcursion_deg.toFixed(0)}°)`);
+  }
+
   return {
-    attitude: torsoAttitudeSeries(landingQuat, cal),
+    attitude: fullAttitude.filter(a => a.t >= landing - 40 && a.t <= landing + 5),
+    opening,
     calibration: {
       window: [cal.window.t0, cal.window.t1],
       forwardSign: cal.forwardSign,
