@@ -1,0 +1,21 @@
+{
+  "name": "Solo \u2014 riley \u2014 2026-07-05 13:56 UTC",
+  "description": "Auto-ingested by tempo-tb-ingest. Jumpers: riley. Exits: riley: 13:56:48.677Z (PST). Session IDs: 1CDD8C18 (riley).",
+  "dropzone": {
+    "name": "Spaceland Dallas",
+    "lat_deg": 33.4569,
+    "lon_deg": -96.377,
+    "elevation_m": 233.0,
+    "timezone": "America/Chicago"
+  },
+  "jumpers": [
+    "riley"
+  ],
+  "baseJumper": "riley",
+  "isSolo": true,
+  "tags": [
+    "20260705",
+    "auto-ingested",
+    "solo"
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "name": "2-Way Formation \u2014 2026-07-05 15:22 UTC",
+  "description": "Auto-ingested by tempo-tb-ingest. Jumpers: riley, scott_z. Exits: riley: 15:22:59.449Z (ACCEL); scott_z: 15:22:58.125Z (ACCEL). Session IDs: 00BAF6AB (riley), 089D3D65 (scott_z).",
+  "dropzone": {
+    "name": "Spaceland Dallas",
+    "lat_deg": 33.4569,
+    "lon_deg": -96.377,
+    "elevation_m": 233.0,
+    "timezone": "America/Chicago"
+  },
+  "jumpers": [
+    "riley",
+    "scott_z"
+  ],
+  "baseJumper": "scott_z",
+  "isSolo": false,
+  "tags": [
+    "20260705",
+    "2way",
+    "auto-ingested",
+    "formation"
+  ]
+}
