@@ -64,6 +64,10 @@ echo "Exit at 13,630 feet." | venv/bin/python kokoro_say.py bm_george /tmp/sampl
 
 ## Status
 
-Prototype (2026-07-15): two scenes (logbook, altitude overview). Planned:
-freefall zoom via live scrubber-sweep capture, deployment IMU close-up, GNSS
-map descent scene, burned-in captions from the narration text.
+Prototype (2026-07-18): full walk-through — logbook intro, fall rate vs time,
+fall-rate distribution (raw + calibrated bars, display mode forced to "Both
+(Comparison)" before capture), altitude profile, IMU, flight path, and a
+closing Landing Profile scene over the Landing Flare Profile chart. Dates are
+vocalized ("July 23, 2026" → "July twenty-third, twenty twenty-six"). Planned:
+freefall zoom via live scrubber-sweep capture, deployment IMU close-up,
+burned-in captions from the narration text.

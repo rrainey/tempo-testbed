@@ -42,12 +42,23 @@ UTC-aligned formation timeline — future work).
 **Freefall** — duration; average and peak fall rate; fall-rate *stability*
 (std dev of the raw series inside the analysis window — a wide spread on a
 solo suggests drills or instability; on RW it may just be the dive plan);
-time to terminal.
+time to terminal; **raw vs density-calibrated average**
+(`velocitySummary.raw/calibrated.averageFallRate`) compared against the
+115–125 mph average-jumper reference range (`FALL_RATE_AVG_MIN/MAX`,
+tempo-core `constants.ts`) — evidence chart `fall-rate-distribution`.
 
 **Deployment** — altitude margin (see thresholds); snivel duration
 (deployment→activation; *tool gap:* `activationOffsetSec` is computed by
 `detectDeployment` but not yet exported in `JumpEvents`); opening-shock peak
-g over `[deploy, deploy+5 s]` of the acceleration series.
+g over `[deploy, deploy+5 s]` of the acceleration series; **opening
+anomalies** from `torso.opening` (opening-anomalies.ts), evidence chart
+`flight-path` (fall back to `imu` without GNSS):
+- *Off-heading opening* — report when `offHeadingOpening` is set (detector
+  threshold 45°), characterizing `offHeading_deg`: < 50° "a notable
+  off-heading opening"; 50–120° "a pronounced off-heading opening"; > 120°
+  "an off-heading opening, reversing the jumper's ground track".
+- *Line twist* — report when `lineTwist ≠ none`, with `yawExcursion_deg` and
+  `peakLoad_g`; say "aggressive" when the detector classifies it so.
 
 **Canopy** — average descent rate mid-flight; pattern shape from the GNSS
 path; turn count/rates (*tool gap:* gyro data is parsed but unused).
@@ -55,7 +66,11 @@ path; turn count/rates (*tool gap:* gyro data is parsed but unused).
 **Landing** — touchdown time after exit; landing impulse character over
 `[landing−1 s, landing+3 s]` (stand-up vs. slide vs. hard); **landing area**:
 point-in-polygon of the GPS fix nearest `landingOffsetSec` against the DZ's
-named areas, plus distance to the area's target when one exists.
+named areas, plus distance to the area's target when one exists;
+**landing profile** (closes the report — ordered last): mean VTG groundspeed
+on final (`[landing−12 s, landing−6 s]`) vs. at touchdown (`[landing±1 s]`),
+statute mph, evidence chart `landing-profile` — emit only when the flare
+chart can render (≥ 8 GNSS fixes in `[landing−18 s, landing+2 s]`).
 
 ## Landing areas (per-dropzone polygons)
 
@@ -80,7 +95,10 @@ named areas, plus distance to the area's target when one exists.
 | Deployment altitude (AGL) | < 3,000 ft | < 2,500 ft (USPA C/D floor; A/B is 3,000) |
 | Opening peak | > 3.5 g | > 5 g (hard opening) |
 | Fall-rate std dev (window) | > 8 mph | — |
+| Calibrated avg fall rate | outside 115–125 mph | — |
 | Landing impulse peak | — | > 5 g |
+| Off-heading opening | ≤ 120° | > 120° (ground-track reversal) |
+| Line twist | benign | aggressive (≥ 1.5 g sustained during rotation) |
 | Snivel duration | > 5 s | > 8 s (once exposed) |
 
 Everything else defaults to `normal` — reported as fact, not concern.
@@ -108,6 +126,7 @@ Everything else defaults to `normal` — reported as fact, not concern.
 - `statement` is written English with **digits and units** ("2,970 ft") —
   the narrator vocalizes it; the analyst never phoneticizes.
 - `evidence.chart` ∈ `logbook-card | altitude-profile | imu | fall-rate |
-  flight-path` — names a visual, not how to frame it (that's narration).
+  fall-rate-distribution | flight-path | landing-profile` — names a visual,
+  not how to frame it (that's narration).
 - Findings are ordered as they should be told: chronological through the
   jump, with `attention` items never buried.

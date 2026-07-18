@@ -98,6 +98,28 @@ async function buildFindings(caseId, jumper) {
     });
   }
 
+  // ── fall-rate distribution (raw vs density-calibrated) ────────────────
+  const vs = analyze.velocitySummary;
+  if (hasExit && vs?.raw?.totalAnalysisTime > 0 && vs?.calibrated) {
+    const raw = Math.round(vs.raw.averageFallRate);
+    const cal = Math.round(vs.calibrated.averageFallRate);
+    // Average-jumper reference range: FALL_RATE_AVG_MIN/MAX (tempo-core constants.ts)
+    const [lo, hi] = [115, 125];
+    let rangePart = 'inside the 115 to 125 mph average-jumper range';
+    let sev = 'normal';
+    if (cal < lo) { rangePart = `${lo - cal} mph slower than the 115 to 125 mph average-jumper range`; sev = 'notable'; }
+    else if (cal > hi) { rangePart = `${cal - hi} mph faster than the 115 to 125 mph average-jumper range`; sev = 'notable'; }
+    findings.push({
+      id: 'fall-rate-distribution',
+      severity: sev,
+      statement: `Corrected for air density, average fall rate was ${cal} mph against ${raw} mph raw — ${rangePart}.`,
+      values: { rawAverageFallRateMph: vs.raw.averageFallRate,
+                calibratedAverageFallRateMph: vs.calibrated.averageFallRate },
+      evidence: { chart: 'fall-rate-distribution' },
+      provenance: 'velocitySummary.raw/calibrated.averageFallRate over analysisWindow; range FALL_RATE_AVG_MIN/MAX (tempo-core constants.ts)',
+    });
+  }
+
   // ── deployment ────────────────────────────────────────────────────────
   if (ev.deploymentOffsetSec != null && ev.deployAltitudeFt != null) {
     const alt = ev.deployAltitudeFt;
@@ -127,6 +149,41 @@ async function buildFindings(caseId, jumper) {
         provenance: 'peak of timeSeries.acceleration over [deploy, deploy+5s]',
       });
     }
+  }
+
+  // ── opening anomalies (off-heading, line twist — torso-yaw based) ─────
+  // The GNSS map is the natural evidence for both (heading swings and the
+  // spin show in the ground track); fall back to the IMU chart without GPS.
+  const op = analyze.torso?.opening;
+  const openingChart = ts.hasGPS ? 'flight-path' : 'imu';
+  if (op?.determinate && op.offHeadingOpening && op.offHeading_deg != null) {
+    const d = Math.round(op.offHeading_deg);
+    const [phrase, sev] =
+      d > 120 ? [`, reversing the jumper's ground track`, 'attention'] :
+      d >= 50 ? [' — a pronounced off-heading opening', 'notable'] :
+                [' — a notable off-heading opening', 'notable'];
+    findings.push({
+      id: 'off-heading-opening',
+      severity: sev,
+      statement: `The canopy opened ${d} degrees off heading${phrase}.`,
+      values: { offHeadingDeg: op.offHeading_deg,
+                freefallHeadingDegT: op.freefallHeading_degT ?? null,
+                canopyHeadingDegT: op.canopyHeading_degT ?? null },
+      evidence: { chart: openingChart },
+      provenance: 'torso.opening.offHeading_deg = |wrap180(canopyHeading − freefallHeading)| (opening-anomalies.ts)',
+    });
+  }
+  if (op && op.lineTwist !== 'none') {
+    const aggressive = op.lineTwist === 'aggressive';
+    findings.push({
+      id: 'line-twist',
+      severity: aggressive ? 'attention' : 'notable',
+      statement: `${aggressive ? 'Aggressive line' : 'Line'} twists on opening — ` +
+        `${Math.round(op.yawExcursion_deg)} degrees of yaw under a peak load of ${op.peakLoad_g.toFixed(1)} g.`,
+      values: { lineTwist: op.lineTwist, yawExcursionDeg: op.yawExcursion_deg, peakLoadG: op.peakLoad_g },
+      evidence: { chart: openingChart },
+      provenance: 'torso.opening.lineTwist/yawExcursion_deg/peakLoad_g (opening-anomalies.ts §line twist)',
+    });
   }
 
   // ── landing area (dropzone polygons, resolved by proximity) ───────────
@@ -186,6 +243,35 @@ async function buildFindings(caseId, jumper) {
       evidence: { chart: 'imu' },
       provenance: 'events.landingOffsetSec (IMU-refined); peak of acceleration over [landing-1s, landing+3s]',
     });
+  }
+
+  // ── landing profile (final approach → touchdown, closes the review) ───
+  if (ev.landingOffsetSec != null && ts.hasGPS) {
+    const tL = ev.landingOffsetSec;
+    // availability floor mirrors the Landing Flare Profile chart (buildFlareProfile)
+    const fixes = ts.gps.filter(p => p.timestamp >= tL - 18 && p.timestamp <= tL + 2);
+    if (fixes.length >= 8) {
+      const KMPH_TO_MPH = 0.621371; // VTG groundspeed arrives in km/h; speak statute mph
+      const spd = ps => {
+        const v = ps.map(p => p.groundspeed_kmph).filter(x => x != null && Number.isFinite(x));
+        return v.length ? mean(v) * KMPH_TO_MPH : null;
+      };
+      const approach = spd(fixes.filter(p => p.timestamp >= tL - 12 && p.timestamp <= tL - 6));
+      const touchdown = spd(fixes.filter(p => Math.abs(p.timestamp - tL) <= 1));
+      if (approach != null && touchdown != null) {
+        const a = Math.round(approach);
+        const t = Math.round(touchdown);
+        findings.push({
+          id: 'landing-profile',
+          severity: 'normal',
+          statement: `On final approach, groundspeed averaged ${a} mph, ` +
+            (t < a ? `slowing to ${t} mph at touchdown.` : `${t} mph at touchdown.`),
+          values: { approachGroundspeedMph: approach, touchdownGroundspeedMph: touchdown },
+          evidence: { chart: 'landing-profile' },
+          provenance: 'mean GNSS VTG groundspeed over [landing-12s, landing-6s] and [landing±1s] (statute mph)',
+        });
+      }
+    }
   }
 
   // attention findings must not be buried: stable-sort them ahead of later normals

@@ -66,6 +66,42 @@ function vocalizeSeconds(seconds) {
   return `${numberWords(s)} ${s === 1 ? 'second' : 'seconds'}`;
 }
 
+const ORDINAL_IRREGULAR = {
+  one: 'first', two: 'second', three: 'third', five: 'fifth', eight: 'eighth',
+  nine: 'ninth', twelve: 'twelfth',
+};
+
+/** 1..31 -> "first", "third", "twelfth", "twentieth", "twenty-third". */
+function ordinalWords(n) {
+  const words = tensWords(n);
+  const last = words.split('-').pop();
+  const ordinalLast = ORDINAL_IRREGULAR[last]
+    ?? (last.endsWith('y') ? `${last.slice(0, -1)}ieth` : `${last}th`);
+  return words.slice(0, words.length - last.length) + ordinalLast;
+}
+
+/** Year -> spoken pairs: 2026 -> "twenty twenty-six", 1999 -> "nineteen
+ *  ninety-nine", 2007 -> "two-thousand and seven", 1900 -> "nineteen hundred". */
+function vocalizeYear(year) {
+  const hi = Math.floor(year / 100);
+  const lo = year % 100;
+  if (hi === 20 && lo < 10) return numberWords(year); // "two-thousand and seven"
+  if (lo === 0) return `${tensWords(hi)} hundred`;
+  if (lo < 10) return `${tensWords(hi)} oh ${ONES[lo]}`; // "nineteen oh seven"
+  return `${tensWords(hi)} ${tensWords(lo)}`;
+}
+
+const MONTHS = 'January|February|March|April|May|June|July|August|September|October|November|December';
+const DATE_RE = new RegExp(`\\b(${MONTHS})\\s+(\\d{1,2})(?:st|nd|rd|th)?,\\s*(\\d{4})\\b`, 'g');
+
+/** Dates -> spoken form: "July 23, 2026" -> "July twenty-third, twenty
+ *  twenty-six". Weekday prefixes ("Friday, July 3, 2026") pass through
+ *  untouched — they are already words. */
+function vocalizeDate(text) {
+  return text.replace(DATE_RE,
+    (_, month, day, year) => `${month} ${ordinalWords(parseInt(day, 10))}, ${vocalizeYear(parseInt(year, 10))}`);
+}
+
 /** Acceleration in g -> "two point three gees", "three point seven five gees".
  *  Decimal digits are spoken individually; whole values skip the point. */
 function vocalizeGees(value) {
@@ -81,16 +117,18 @@ function vocalizeGees(value) {
  *  digits ("Deployed at 2,970 ft, 65 seconds after exit. Opening peaked at
  *  3.7 g."); this rewrites the figures into house-style spoken words. */
 function speakify(text) {
-  return text
+  return vocalizeDate(text)
     .replace(/(\d{1,3}(?:,\d{3})+|\d+)\s*(?:ft|feet)\b(\s*AGL)?/gi,
       (_, num) => vocalizeAltitudeFt(parseFloat(num.replace(/,/g, ''))))
+    .replace(/(\d+)\s*(?:to|–)\s*(\d+)\s*mph\b/gi,
+      (_, a, b) => `${numberWords(parseInt(a, 10))} to ${vocalizeSpeedMph(parseInt(b, 10))}`)
     .replace(/(\d+)\s*mph\b/gi, (_, num) => vocalizeSpeedMph(parseInt(num, 10)))
     .replace(/(\d+)\s*(seconds|second)\b/gi, (_, num) => vocalizeSeconds(parseInt(num, 10)))
-    .replace(/(\d+)\s*(meters|meter)\b/gi, (_, num, unit) => `${numberWords(parseInt(num, 10))} ${unit.toLowerCase()}`)
+    .replace(/(\d+)\s*(meters|meter|degrees|degree)\b/gi, (_, num, unit) => `${numberWords(parseInt(num, 10))} ${unit.toLowerCase()}`)
     .replace(/(\d+(?:\.\d+)?)\s*g\b/g, (_, num) => vocalizeGees(num));
 }
 
 module.exports = {
   numberWords, vocalizeAltitudeFt, vocalizeSpeedMph, vocalizeSeconds,
-  vocalizeGees, speakify,
+  vocalizeGees, ordinalWords, vocalizeYear, vocalizeDate, speakify,
 };

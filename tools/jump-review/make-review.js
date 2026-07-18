@@ -15,7 +15,7 @@ const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const { buildFindings } = require('./analyze-jump');
-const { vocalizeAltitudeFt, vocalizeSeconds, speakify } = require('./vocalize');
+const { vocalizeAltitudeFt, vocalizeSeconds, vocalizeDate, speakify } = require('./vocalize');
 
 const BASE = __dirname;
 const OUT = path.join(BASE, 'out');
@@ -33,8 +33,10 @@ const CAPTURES = {
   'logbook-card': { kind: 'region', anchorTop: '[data-testid="logbook-summary"]', anchorBottomText: 'Max Descent' },
   'altitude-profile': { kind: 'element', titleText: 'Altitude Profile' },
   'fall-rate': { kind: 'element', titleText: 'Fall Rate vs Time' },
+  'fall-rate-distribution': { kind: 'element', titleText: 'Fall Rate Distribution' },
   'imu': { kind: 'element', titleText: 'IMU Acceleration' },
   'flight-path': { kind: 'element', titleText: 'Flight Path' },
+  'landing-profile': { kind: 'element', titleText: 'Landing Flare Profile' },
 };
 
 /** Findings -> scenes: opening logbook scene, then one scene per evidence
@@ -45,7 +47,7 @@ function buildScenes(report) {
   const lb = report.logbook;
   const intro = [
     `Jump review for ${report.jumper}.`,
-    lb.dateLocal ? `${lb.dateLocal}, at ${lb.location}.` : `At ${lb.location}.`,
+    lb.dateLocal ? `${vocalizeDate(lb.dateLocal)}, at ${lb.location}.` : `At ${lb.location}.`,
     lb.timeLocal && lb.exitAltitudeFt != null
       ? `Exit at ${lb.timeLocal} local time, from ${vocalizeAltitudeFt(lb.exitAltitudeFt)}.` : '',
     lb.freefallSec != null && lb.deployAltitudeFt != null
@@ -96,6 +98,16 @@ async function main() {
   await page.getByRole('button', { name: 'Run Analysis' }).click();
   await page.waitForSelector('[data-testid="logbook-summary"]', { timeout: 30000 });
   await page.waitForTimeout(2500);
+
+  // Show raw + calibrated together on both fall-rate charts (line and bars).
+  const modeSelect = page.getByText('Fall Rate Display Mode')
+    .locator('xpath=ancestor::*[contains(@class,"mantine-Card-root")][1]')
+    .locator('input');
+  if (await modeSelect.count() > 0) {
+    await modeSelect.first().click();
+    await page.getByRole('option', { name: 'Both (Comparison)' }).click();
+    await page.waitForTimeout(500);
+  }
 
   for (const scene of scenes) {
     const file = path.join(OUT, `${scene.id}.png`);

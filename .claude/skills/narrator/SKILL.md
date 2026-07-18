@@ -26,12 +26,19 @@ of truth for house style:
 | 2.3 g | two point three gees |
 | 3.75 g | three point seven five gees |
 | 40 meters | forty meters |
+| 165 degrees | one-hundred and sixty-five degrees |
+| July 23, 2026 | July twenty-third, twenty twenty-six |
+| 115 to 125 mph | one-hundred and fifteen to one-hundred and twenty-five miles per hour |
 
 - Altitudes round to the nearest 10 ft and **drop "AGL"** (only formal
   contexts speak "above ground level" — `vocalizeAltitudeFt(x, {formal:true})`).
 - Acceleration readings are spoken as "gees" with decimal digits spelled out
   individually ("3.75 g" → "three point seven five gees", never "seventy-five").
 - Times of day stay as digits ("11:28 AM"), always DZ-local, say "local time".
+- Dates speak the day as an ordinal and the year in pairs (`vocalizeDate`):
+  "July 23, 2026" → "July twenty-third, twenty twenty-six"; 2000–2009 years
+  stay long form ("two-thousand and seven"). Weekday prefixes pass through
+  unchanged — they are already words.
 - Capitalize a vocalized phrase that begins a sentence.
 
 ## Voice & delivery
@@ -49,11 +56,17 @@ of truth for house style:
   block over the logbook-card capture.
 - Remaining findings group into one scene per `evidence.chart`, in
   first-appearance order. Capture recipes live in the `CAPTURES` map:
-  `logbook-card | altitude-profile | fall-rate | imu | flight-path`. The
-  flight-path capture inherits the web map's descent-focused framing and the
-  blue landing-area demarcation (`LANDING_AREA_STYLE` in tempo-core) —
-  the same view the jumper sees on the site.
-- Scene duration = narration audio length + 1 s; Ken Burns zoom over a 2×
+  `logbook-card | altitude-profile | fall-rate | fall-rate-distribution |
+  imu | flight-path | landing-profile`. The flight-path capture inherits the
+  web map's descent-focused framing and the blue landing-area demarcation
+  (`LANDING_AREA_STYLE` in tempo-core) — the same view the jumper sees on
+  the site.
+- Before capturing, the page's Fall Rate Display Mode is set to
+  **Both (Comparison)** so the Fall Rate vs Time chart and the Fall Rate
+  Distribution bar chart each show raw and calibrated series side by side.
+- `landing-profile` captures the Landing Flare Profile chart and closes the
+  walk-through (the analyst orders it last; only caveats follow it).
+- Scene duration = narration audio length + 2 s; Ken Burns zoom over a 2×
   still, 0.4 s fades. Planned: a `clip` capture kind (live scrubber-sweep
   recordings) and burned-in captions from the narration text.
 

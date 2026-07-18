@@ -2,7 +2,7 @@
 
 const {
   numberWords, vocalizeAltitudeFt, vocalizeSpeedMph, vocalizeSeconds,
-  vocalizeGees, speakify,
+  vocalizeGees, ordinalWords, vocalizeYear, vocalizeDate, speakify,
 } = require('./vocalize');
 
 describe('vocalize', () => {
@@ -40,6 +40,31 @@ describe('vocalize', () => {
     expect(vocalizeGees('5')).toBe('five gees');
   });
 
+  it('speaks day-of-month ordinals', () => {
+    expect(ordinalWords(1)).toBe('first');
+    expect(ordinalWords(3)).toBe('third');
+    expect(ordinalWords(12)).toBe('twelfth');
+    expect(ordinalWords(20)).toBe('twentieth');
+    expect(ordinalWords(23)).toBe('twenty-third');
+    expect(ordinalWords(31)).toBe('thirty-first');
+  });
+
+  it('speaks years in pairs', () => {
+    expect(vocalizeYear(2026)).toBe('twenty twenty-six');
+    expect(vocalizeYear(1999)).toBe('nineteen ninety-nine');
+    expect(vocalizeYear(2007)).toBe('two-thousand and seven');
+    expect(vocalizeYear(1907)).toBe('nineteen oh seven');
+    expect(vocalizeYear(1900)).toBe('nineteen hundred');
+  });
+
+  it('speaks dates, passing weekday prefixes through', () => {
+    expect(vocalizeDate('July 23, 2026')).toBe('July twenty-third, twenty twenty-six');
+    expect(vocalizeDate('July 3, 2026')).toBe('July third, twenty twenty-six');
+    expect(vocalizeDate('Friday, July 3, 2026, at Skydive Spaceland.'))
+      .toBe('Friday, July third, twenty twenty-six, at Skydive Spaceland.');
+    expect(vocalizeDate('no date here')).toBe('no date here');
+  });
+
   it('speakifies analyst statements at the narrator boundary', () => {
     expect(speakify('Deployed at 2,970 ft, 65 seconds after exit.'))
       .toBe('Deployed at two-thousand, nine-hundred and seventy feet, sixty-five seconds after exit.');
@@ -50,5 +75,13 @@ describe('vocalize', () => {
     expect(speakify('Opening peaked at 3.7 g.')).toBe('Opening peaked at three point seven gees.');
     expect(speakify('a landing impulse of 2.3 g — a hard landing'))
       .toBe('a landing impulse of two point three gees — a hard landing');
+    expect(speakify('First jump since July 23, 2026.'))
+      .toBe('First jump since July twenty-third, twenty twenty-six.');
+    expect(speakify('inside the 115 to 125 mph average-jumper range'))
+      .toBe('inside the one-hundred and fifteen to one-hundred and twenty-five miles per hour average-jumper range');
+    expect(speakify('The canopy opened 165 degrees off heading.'))
+      .toBe('The canopy opened one-hundred and sixty-five degrees off heading.');
+    expect(speakify('540 degrees of yaw under a peak load of 1.8 g.'))
+      .toBe('five-hundred and forty degrees of yaw under a peak load of one point eight gees.');
   });
 });
